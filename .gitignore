@@ -4,7 +4,6 @@
 **/Debug/
 **/Release/
 **/*.tlog/
-*.dll
 *.exe
 *.exp
 *.ilk

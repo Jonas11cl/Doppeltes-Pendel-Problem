@@ -33,48 +33,27 @@ public:
     double Reibung = 0.05;
     bool spielvorbei = false;
     double Zielenergie_1 = Masse_Stange_1 * Schwerkraft * Laenge_Stange_1;
-    double Zielenergie_2 = Masse_Stange_1 * Schwerkraft * (Laenge_Stange_1 + Laenge_Stange_2);
+    double Zielenergie_2 = Masse_Stange_2 * Schwerkraft * (Laenge_Stange_1 + Laenge_Stange_2);
     double GesammtZielEnergie = Zielenergie_1 + Zielenergie_2;
+    bool waroben = false;
     double RandomZahlR(double Anfang, double Ende)
     {
         static std::random_device rd;
-        static std::mt19937 gen(rd());
+        thread_local static std::mt19937 gen(rd());
         std::uniform_real_distribution<double> distrib(Anfang, Ende);
         return distrib(gen);
     }
-    void PhysikZuruecksetzen(int Generation, int Spiel)
+    void PhysikZuruecksetzen(int Generation, double Winkel1, double Winkel2)
     {
-        /* if (Generation < 200)
-         {*/
-        Winkel_Stange_1 = RandomZahlR(-0.05, 0.05); // Startet minimal links oder rechts
-        Winkel_Stange_2 = RandomZahlR(-0.05, 0.05);
-        /* }*/
-        /*       else if (Generation < 500)
-               {
-                   Winkel_Stange_1 = 1.5708;
-                   Winkel_Stange_2 = 1.5708;
-               }
-               else
-               {
-
-                   if (Spiel == 1)
-                   {
-                       Winkel_Stange_1 = 0.3;
-                       Winkel_Stange_2 = 0.3;
-                   }
-                   else
-                   {
-                       Winkel_Stange_1 = 3.142;
-                       Winkel_Stange_2 = 3.142;
-                   }
-               }*/
         Wagen_Position = 0.0;
         Wagen_Geschwindigkeit = 0.0;
         Winkel_Geschwindigkeit_1 = 0.0;
         Winkel_Geschwindigkeit_2 = 0.0;
         spielvorbei = false;
+        waroben = false;
+        Winkel_Stange_1 = Winkel1;
+        Winkel_Stange_2 = Winkel2;
     }
-
     double Update(double Schubkraft, double Zeitschritt)
     {
         double Fittness = 0;
@@ -150,6 +129,10 @@ public:
     {
         if (cos(Winkel_Stange_1) > 0.85 && cos(Winkel_Stange_2) > 0.85)
         {
+            if (waroben != true)
+            {
+                waroben = true;
+            }
             double WinkelFeher_1 = 7.5 * (1.0 - cos(Winkel_Stange_1));
             double WinkelFeher_2 = 7.5 * (1.0 - cos(Winkel_Stange_2));
             double Winkelgeschwindigkeit = 0.3 * (abs(Winkel_Geschwindigkeit_1) + abs(Winkel_Geschwindigkeit_2));
@@ -159,6 +142,10 @@ public:
         }
         else
         {
+            if (waroben == true)
+            {
+                spielvorbei = true;
+            }
             double Lageengerie_1 = Masse_Stange_1 * Schwerkraft * (Laenge_Stange_1 * cos(Winkel_Stange_1));
             double Lagenergie_2 = Masse_Stange_2 * Schwerkraft * ((Laenge_Stange_1 * cos(Winkel_Stange_1)) + (Laenge_Stange_2 * cos(Winkel_Stange_2)));
             double Lageenergie = Lageengerie_1 + Lagenergie_2;
@@ -168,7 +155,8 @@ public:
             double Energie = Bewegumgsenergie + Lageenergie;
 
             double Fehler = abs(GesammtZielEnergie - Energie);
-            return 1.0 / (1.0 + Fehler);
+            double fitnessSchritt = (1.0 / (1.0 + Fehler)) - 0.25;
+            return std::max(0.0, fitnessSchritt);
         }
     }
 };

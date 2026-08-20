@@ -5,10 +5,13 @@
 #include <random>
 #include <cmath>
 #include <unordered_map>
+#include <vector>
+#include <algorithm>
+#include <deque>
 double RandomZahl(double Anfang, double Ende)
 {
     static std::random_device rd;
-    static std::mt19937 gen(rd());
+    thread_local static std::mt19937 gen(rd());
     std::uniform_real_distribution<double> distrib(Anfang, Ende);
     return distrib(gen);
 }
@@ -50,7 +53,6 @@ public:
     double Fitness;
     double Summe_1[26];
     double Summe_2[12];
-    double MittelGewcihte[26];
     double Endgewichte[12];
 
     NuralNetwork()
@@ -59,10 +61,6 @@ public:
         for (int i = 0; i < 12; ++i)
         {
             Endgewichte[i] = RandomZahl(-1.0, 1.0);
-        }
-        for (int i = 0; i < 26; ++i)
-        {
-            MittelGewcihte[i] = RandomZahl(-1.0, 1.0);
         }
     }
 
@@ -88,6 +86,7 @@ public:
             {
                 AkkSumme += Summe_1[e] * HidenLayer_2[i].Gewichte[e];
             }
+            AkkSumme += HidenLayer_2[i].Bias;
             AkkSumme = std::tanh(AkkSumme);
             Summe_2[i] = AkkSumme;
         }
@@ -95,12 +94,34 @@ public:
         {
             Endsumme += Summe_2[i] * Endgewichte[i];
         }
+        Endsumme += Bias;
 
         Endsumme = 10.0 * std::tanh(Endsumme);
         return Endsumme;
     }
-    void Motiren()
+    void Motiren(std::deque<double> BesteFitness, double bestfitness)
     {
+        double MuttationsWarscheilichkeit = 0.05;
+        double RadMax = 0.05;
+        double RadMin = -0.05;
+        if (BesteFitness.size() >= 50)
+        {
+            double Rundungsarry[10];
+            auto Stadtpunkt = BesteFitness.end() - 10;
+            std::copy(Stadtpunkt, BesteFitness.end(), Rundungsarry);
+            double Zahl = 0;
+            for (int i = 0; i < 10; i++)
+            {
+                Zahl += Rundungsarry[i];
+            }
+            Zahl = Zahl / 10;
+            if (Zahl + 100 > bestfitness)
+            {
+                MuttationsWarscheilichkeit = 0.15;
+                RadMax = 0.15;
+                RadMin = -0.15;
+            }
+        }
         double NeueKiWarscheilichkeit = 0.1;
         double Mb = RandomZahl(0.0, 1.0);
         if (Mb < NeueKiWarscheilichkeit)
@@ -109,7 +130,6 @@ public:
             return;
         }
 
-        double MuttationsWarscheilichkeit = 0.05;
         for (int i = 0; i < 26; i++)
         {
             for (int e = 0; e < 8; e++)
@@ -117,14 +137,14 @@ public:
                 double RandZahl = RandomZahl(0.0, 1.0);
                 if (RandZahl < MuttationsWarscheilichkeit)
                 {
-                    double Muttatiosrate = RandomZahl(-0.05, 0.05);
+                    double Muttatiosrate = RandomZahl(RadMin, RadMax);
                     HidelLayer_1[i].Gewichte[e] += Muttatiosrate;
                 }
             }
             double RandZahl = RandomZahl(0.0, 1.0);
             if (RandZahl < MuttationsWarscheilichkeit)
             {
-                double Muttatiosrate = RandomZahl(-0.05, 0.05);
+                double Muttatiosrate = RandomZahl(RadMin, RadMax);
                 HidelLayer_1[i].Bias += Muttatiosrate;
             }
         }
@@ -135,14 +155,14 @@ public:
                 double RandZahl = RandomZahl(0.0, 1.0);
                 if (RandZahl < MuttationsWarscheilichkeit)
                 {
-                    double Muttatiosrate = RandomZahl(-0.05, 0.05);
+                    double Muttatiosrate = RandomZahl(RadMin, RadMax);
                     HidenLayer_2[i].Gewichte[e] += Muttatiosrate;
                 }
             }
             double RandZahl = RandomZahl(0.0, 1.0);
             if (RandZahl < MuttationsWarscheilichkeit)
             {
-                double Muttatiosrate = RandomZahl(-0.05, 0.05);
+                double Muttatiosrate = RandomZahl(RadMin, RadMax);
                 HidenLayer_2[i].Bias += Muttatiosrate;
             }
         }
@@ -151,14 +171,14 @@ public:
             double RandZahl = RandomZahl(0.0, 1.0);
             if (RandZahl < MuttationsWarscheilichkeit)
             {
-                double Muttatiosrate = RandomZahl(-0.05, 0.05);
+                double Muttatiosrate = RandomZahl(RadMin, RadMax);
                 Endgewichte[i] += Muttatiosrate;
             }
         }
         double RandZahl = RandomZahl(0.0, 1.0);
         if (RandZahl < MuttationsWarscheilichkeit)
         {
-            double Muttatiosrate = RandomZahl(-0.05, 0.05);
+            double Muttatiosrate = RandomZahl(RadMin, RadMax);
             Bias += Muttatiosrate;
         }
     }
@@ -173,20 +193,52 @@ int main()
         Ki[i] = NuralNetwork();
     }
     bool trainingFertig = false;
-    for (int gen = 0; gen < 2000; gen++)
+    std::deque<double> BesteFitnness;
+    for (int gen = 0; gen < 10000; gen++)
     {
+
+        double Winkel_Stange_1_0 = RandomZahl(-0.08, 0.08);
+        double Winkel_Stange_2_0 = RandomZahl(-0.08, 0.08);
+        double Winkel_Stange_1_1;
+        double Winkel_Stange_2_1;
+        if (gen < 500)
+        {
+
+            Winkel_Stange_1_1 = RandomZahl(-0.8, 0.8);
+            Winkel_Stange_2_1 = RandomZahl(-0.8, 0.8);
+        }
+        else if (gen < 1200)
+        {
+
+            Winkel_Stange_1_1 = 1.57 + RandomZahl(-0.15, 0.15);
+            Winkel_Stange_2_1 = 1.57 + RandomZahl(-0.15, 0.15);
+        }
+        else
+        {
+
+            Winkel_Stange_1_1 = 3.14159 + RandomZahl(-0.1, 0.1);
+            Winkel_Stange_2_1 = 3.14159 + RandomZahl(-0.1, 0.1);
+        }
+
         double besteFitness = -INFINITY;
         int besterIndex = 0;
-        int MeistenUpdates = -1;
+        int MeistenUpdates[2] = {-1, -1};
 #pragma omp parallel for
         for (int Kig = 0; Kig < 750; Kig++)
         {
             Ki[Kig].Fitness = 0.0;
-            // for (int Spiel = 0; Spiel < 2; Spiel++)
+            for (int Spiel = 0; Spiel < 2; Spiel++)
             {
                 MeineKlasse lokalesSpiel;
                 int Updates = 0;
-                lokalesSpiel.PhysikZuruecksetzen(gen, 0);
+                if (Spiel == 0)
+                {
+                    lokalesSpiel.PhysikZuruecksetzen(gen, Winkel_Stange_1_0, Winkel_Stange_2_0);
+                }
+                else
+                {
+                    lokalesSpiel.PhysikZuruecksetzen(gen, Winkel_Stange_1_1, Winkel_Stange_2_1);
+                }
 
                 while (lokalesSpiel.spielvorbei != true)
                 {
@@ -197,10 +249,14 @@ int main()
                     {
                         break;
                     }
+                    if (Updates > 1500 && lokalesSpiel.waroben == false)
+                    {
+                        break;
+                    }
                 }
-                if (Updates > MeistenUpdates)
+                if (Updates > MeistenUpdates[Spiel])
                 {
-                    MeistenUpdates = Updates;
+                    MeistenUpdates[Spiel] = Updates;
                 }
             }
         }
@@ -224,21 +280,28 @@ int main()
             BesteKi[e] = Ki[index];
         }
 
-        std::cout << "Generation " << gen << " - Beste Fitness: " << BesteKi[0].Fitness << " - Updates Überlebet:" << MeistenUpdates << std::endl;
-
+        std::cout << "Generation " << gen << " - Beste Fitness: " << BesteKi[0].Fitness << " - Updates Überlebet Spiel 1:" << MeistenUpdates[0] << " - Updates Überlebet Spiel 2:" << MeistenUpdates[1] << std::endl;
+        if (BesteFitnness.size() >= 50)
+        {
+            BesteFitnness.pop_back();
+        }
+        BesteFitnness.push_front(BesteKi[0].Fitness);
+        if (gen == 500 || gen == 1200)
+        {
+            BesteFitnness.clear();
+        }
+        for (int f = 0; f < 5; f++)
+        {
+            Ki[f] = BesteKi[f];
+        }
         for (int e = 0; e < 750; e++)
         {
-            for (int f = 0; f < 5; f++)
-            {
-                Ki[f] = BesteKi[f];
-            }
-
             if (e >= 5)
             {
                 int Rand = RandomZahl(0, 4);
 
                 Ki[e] = BesteKi[Rand];
-                Ki[e].Motiren();
+                Ki[e].Motiren(BesteFitnness, BesteKi[0].Fitness);
             }
         }
     }
@@ -252,20 +315,52 @@ extern "C" __declspec(dllexport) void StarteTraining()
         Ki[i] = NuralNetwork();
     }
     bool trainingFertig = false;
-    for (int gen = 0; gen < 2000; gen++)
+    std::deque<double> BesteFitnness;
+    for (int gen = 0; gen < 10000; gen++)
     {
+
+        double Winkel_Stange_1_0 = RandomZahl(-0.08, 0.08);
+        double Winkel_Stange_2_0 = RandomZahl(-0.08, 0.08);
+        double Winkel_Stange_1_1;
+        double Winkel_Stange_2_1;
+        if (gen < 500)
+        {
+
+            Winkel_Stange_1_1 = RandomZahl(-0.8, 0.8);
+            Winkel_Stange_2_1 = RandomZahl(-0.8, 0.8);
+        }
+        else if (gen < 1200)
+        {
+
+            Winkel_Stange_1_1 = 1.57 + RandomZahl(-0.15, 0.15);
+            Winkel_Stange_2_1 = 1.57 + RandomZahl(-0.15, 0.15);
+        }
+        else
+        {
+
+            Winkel_Stange_1_1 = 3.14159 + RandomZahl(-0.1, 0.1);
+            Winkel_Stange_2_1 = 3.14159 + RandomZahl(-0.1, 0.1);
+        }
+
         double besteFitness = -INFINITY;
         int besterIndex = 0;
-        int MeistenUpdates = -1;
+        int MeistenUpdates[2] = {-1, -1};
 #pragma omp parallel for
         for (int Kig = 0; Kig < 750; Kig++)
         {
             Ki[Kig].Fitness = 0.0;
-            // for (int Spiel = 0; Spiel < 2; Spiel++)
+            for (int Spiel = 0; Spiel < 2; Spiel++)
             {
                 MeineKlasse lokalesSpiel;
                 int Updates = 0;
-                lokalesSpiel.PhysikZuruecksetzen(gen, 0);
+                if (Spiel == 0)
+                {
+                    lokalesSpiel.PhysikZuruecksetzen(gen, Winkel_Stange_1_0, Winkel_Stange_2_0);
+                }
+                else
+                {
+                    lokalesSpiel.PhysikZuruecksetzen(gen, Winkel_Stange_1_1, Winkel_Stange_2_1);
+                }
 
                 while (lokalesSpiel.spielvorbei != true)
                 {
@@ -276,10 +371,14 @@ extern "C" __declspec(dllexport) void StarteTraining()
                     {
                         break;
                     }
+                    if (Updates > 1500 && lokalesSpiel.waroben == false)
+                    {
+                        break;
+                    }
                 }
-                if (Updates > MeistenUpdates)
+                if (Updates > MeistenUpdates[Spiel])
                 {
-                    MeistenUpdates = Updates;
+                    MeistenUpdates[Spiel] = Updates;
                 }
             }
         }
@@ -303,21 +402,28 @@ extern "C" __declspec(dllexport) void StarteTraining()
             BesteKi[e] = Ki[index];
         }
 
-        std::cout << "Generation " << gen << " - Beste Fitness: " << BesteKi[0].Fitness << " - Updates Überlebet:" << MeistenUpdates << std::endl;
-
+        std::cout << "Generation " << gen << " - Beste Fitness: " << BesteKi[0].Fitness << " - Updates Überlebet Spiel 1:" << MeistenUpdates[0] << " - Updates Überlebet Spiel 2:" << MeistenUpdates[1] << std::endl;
+        if (BesteFitnness.size() >= 50)
+        {
+            BesteFitnness.pop_back();
+        }
+        BesteFitnness.push_front(BesteKi[0].Fitness);
+        if (gen == 500 || gen == 1200)
+        {
+            BesteFitnness.clear();
+        }
+        for (int f = 0; f < 5; f++)
+        {
+            Ki[f] = BesteKi[f];
+        }
         for (int e = 0; e < 750; e++)
         {
-            for (int f = 0; f < 5; f++)
-            {
-                Ki[f] = BesteKi[f];
-            }
-
             if (e >= 5)
             {
                 int Rand = RandomZahl(0, 4);
 
                 Ki[e] = BesteKi[Rand];
-                Ki[e].Motiren();
+                Ki[e].Motiren(BesteFitnness, BesteKi[0].Fitness);
             }
         }
     }
@@ -326,7 +432,7 @@ MeineKlasse lokalesSpiel;
 
 extern "C" __declspec(dllexport) void ResetPhysik()
 {
-    lokalesSpiel.PhysikZuruecksetzen(10000, 0);
+    lokalesSpiel.PhysikZuruecksetzen(10000, 3.14159, 3.14159);
 }
 extern "C" __declspec(dllexport) void MachEinenLiveSchritt()
 {
