@@ -13,9 +13,121 @@ canvas {
 body {
   margin: 0;
   padding: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+
   min-height: 100vh;
   background: #111;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-sizing: border-box;
+}
+
+.Buttons {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  margin-bottom: 80px;
+  margin-top: 20px;
+}
+
+.Starte-Button {
+  background-color: #4aca00;
+  border-radius: 8px;
+  border-width: 1px;
+  border-style: solid;
+  border-color: #4b4b4b;
+  height: 30px;
+  width: 120px;
+}
+
+.Reset-Button {
+  background-color: #ca0b0b;
+  border-radius: 8px;
+  border-width: 1px;
+  border-style: solid;
+  border-color: #4b4b4b;
+  height: 30px;
+  width: 120px;
+}
+.Upload-Button {
+  background-color: #0bcaca;
+  border-radius: 8px;
+  border-width: 1px;
+  border-style: solid;
+  border-color: #4b4b4b;
+  height: 30px;
+  width: 120px;
+}
+
+.Download-Button {
+  background-color: #0b37ca;
+  border-radius: 8px;
+  border-width: 1px;
+  border-style: solid;
+  border-color: #4b4b4b;
+  height: 30px;
+  width: 120px;
+}
+
+/* --- Neue Styles für Drag & Drop --- */
+
+.upload-zone {
+  /* Gleiche Maße und Basis-Look wie das Canvas */
+  width: min(100vw, 960px);
+  height: min(80vh, 560px);
+  margin: 0 auto;
+  box-shadow: 0 0 16px rgba(0, 0, 0, 0.25);
+  background: #ffffff;
+  border-radius: 15px;
+  border: 3px dashed rgb(37, 37, 37);
+
+  /* Flexbox um den Text und Button mittig zu platzieren */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition:
+    background 0.3s ease,
+    border-color 0.3s ease;
+  box-sizing: border-box;
+}
+
+/* Hover-Effekt wenn eine Datei darüber gezogen wird */
+.upload-zone.dragover {
+  background: #e0f7fa;
+  border-color: #0bcaca;
+}
+
+.upload-text {
+  font-family: sans-serif;
+  color: #333;
+  margin-bottom: 20px;
+  text-align: center;
+  pointer-events: none; /* Verhindert Probleme beim Drag & Drop */
+}
+
+/* Der Senden-Button im gleichen Style wie deine anderen Buttons */
+.Send-Button {
+  background-color: #0bcaca;
+  border-radius: 8px;
+  border-width: 1px;
+  border-style: solid;
+  border-color: #4b4b4b;
+  height: 30px;
+  width: 120px;
+  cursor: pointer;
+  font-weight: bold;
+  display: none; /* Ist erst sichtbar, wenn eine Datei gewählt wurde */
+  margin-top: 15px;
+}
+
+.Send-Button:hover,
+.Upload-Button:hover,
+.Starte-Button:hover,
+.Reset-Button:hover,
+.Download-Button:hover {
+  filter: brightness(1.1);
+  cursor: pointer;
 }

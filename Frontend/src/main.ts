@@ -2,50 +2,108 @@ const canvas = document.getElementById("pendelCanvas") as HTMLCanvasElement;
 canvas.width = 960;
 canvas.height = 560;
 const ctx = canvas.getContext("2d")!;
-
+const Restart_Button = document.getElementById(
+  "Reset-Button",
+) as HTMLButtonElement;
+const Download_Button = document.getElementById(
+  "Download-Button",
+) as HTMLButtonElement;
 // Verbindung zum C# Server
 const verbindung = new WebSocket("ws://127.0.0.1:8080");
 
+// Interface passt zu Ihrer C#-Klasse "DatenPaket"
 interface ChatMessage {
+  Version: number;
   WagenX: number;
   Winkel1: number;
   Winkel2: number;
 }
 
+class ServerMessage {
+  Aktion: string;
+  Inhalt: string;
+
+  constructor(aktion: string, inhalt: string) {
+    this.Aktion = aktion;
+    this.Inhalt = inhalt;
+  }
+}
+
+// Interface passt zu Ihrer C#-Klasse "KiPaket"
+interface KiMessage {
+  Version: number;
+  KiDaten: string; // Enthält den serialisierten C#-Struct "RetrunKi"
+}
+
 verbindung.addEventListener("message", (event) => {
   try {
-    const message: ChatMessage = JSON.parse(event.data) as ChatMessage;
-    const wagenX = Number(message.WagenX);
-    const winkel1Rad = Number(message.Winkel1);
-    const winkel2Rad = Number(message.Winkel2);
+    // 1. Den empfangenen Text-String in ein allgemeines Objekt umwandeln
+    const rohDaten = JSON.parse(event.data);
 
-    if (
-      !Number.isFinite(wagenX) ||
-      !Number.isFinite(winkel1Rad) ||
-      !Number.isFinite(winkel2Rad)
-    ) {
-      console.warn("Ungültige Daten empfangen:", event.data);
-      return;
+    // 2. Prüfen, ob es sich um Version 1 (DatenPaket) handelt
+    if (rohDaten.Version === 1) {
+      const message = rohDaten as ChatMessage;
+      const wagenX = Number(message.WagenX);
+      const winkel1Rad = Number(message.Winkel1);
+      const winkel2Rad = Number(message.Winkel2);
+
+      if (
+        !Number.isFinite(wagenX) ||
+        !Number.isFinite(winkel1Rad) ||
+        !Number.isFinite(winkel2Rad)
+      ) {
+        console.warn("Ungültige Daten empfangen:", event.data);
+        return;
+      }
+
+      // --- DIE FESTE KAMERA (Meter in Pixel umrechnen) ---
+      const bildschirmMitte = canvas.width / 2;
+      const pixelProMeter = 160;
+
+      // Echte Bildschirm-Koordinate berechnen
+      const sichtbarerX = bildschirmMitte + wagenX * pixelProMeter;
+
+      // Zeichnen
+      zeichnePendel(sichtbarerX, winkel1Rad, winkel2Rad);
+
+      // 3. Prüfen, ob es sich um Version 2 (KiPaket) handelt
+    } else if (rohDaten.Version === 2) {
+      const message = rohDaten as KiMessage;
+
+      // Nutzt das Feld "KiDaten" aus Ihrem C#-Code und speichert es direkt als Datei
+      downloadJsonString(message.KiDaten, "Ki.json");
+    } else {
+      console.warn("Unbekannte Paket-Version erhalten:", rohDaten.Version);
     }
-
-    // --- DIE FESTE KAMERA (Meter in Pixel umrechnen) ---
-    // Die Mitte des Bildschirms ist X = 480 Pixel (entspricht in der Physik X = 0.0 Meter)
-    const bildschirmMitte = canvas.width / 2;
-
-    // 1 Meter in der Physik-Engine sind 160 Pixel auf dem Bildschirm.
-    // Bei max. 2.4 Metern nach rechts bewegt sich der Wagen also um 384 Pixel
-    // (480 + 384 = 864), bleibt also exakt auf der grauen Schiene!
-    const pixelProMeter = 160;
-
-    // Echte Bildschirm-Koordinate berechnen
-    const sichtbarerX = bildschirmMitte + wagenX * pixelProMeter;
-
-    // Zeichnen
-    zeichnePendel(sichtbarerX, winkel1Rad, winkel2Rad);
   } catch (error) {
     console.error("Fehler beim Parsen:", error);
   }
 });
+
+/**
+ * Wandelt einen rohen JSON-Text direkt im Browser in eine Datei um und lädt sie herunter.
+ * Da die KI-Daten direkt vom Server als Text kommen, ist kein 'fetch' (HTTP-Anfrage) nötig.
+ */
+function downloadJsonString(jsonInhalt: string, filename: string): void {
+  try {
+    // Erstellt ein Daten-Blob direkt aus dem Text-Inhalt
+    const blob = new Blob([jsonInhalt], { type: "application/json" });
+    const blobUrl = window.URL.createObjectURL(blob);
+
+    const link = document.createElement("a");
+    link.href = blobUrl;
+    link.download = filename;
+    link.style.display = "none";
+
+    document.body.appendChild(link);
+    link.click();
+
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(blobUrl);
+  } catch (error) {
+    console.error("Download der KI-Datei fehlgeschlagen:", error);
+  }
+}
 
 // Eine wiederverwendbare Funktion zum Zeichnen des Pendels
 function zeichnePendel(wagenX: number, winkel1Rad: number, winkel2Rad: number) {
@@ -76,7 +134,6 @@ function zeichnePendel(wagenX: number, winkel1Rad: number, winkel2Rad: number) {
   // 5. Spitze der Stange_1 berechnen (Trigonometrie: Sinus & Kosinus)
   const Stange_1nLaenge = 160;
   const spitzeX = pivotX + Stange_1nLaenge * Math.sin(winkel1Rad);
-  // WICHTIG: Minus, weil Y im Browser von oben nach unten zählt!
   const spitzeY = pivotY - Stange_1nLaenge * Math.cos(winkel1Rad);
 
   // 6. Stange_1 zeichnen (Dunkle Linie)
@@ -89,27 +146,26 @@ function zeichnePendel(wagenX: number, winkel1Rad: number, winkel2Rad: number) {
 
   // 7. Gewicht / Kugel zeichnen (Roter Kreis an der Spitze)
   ctx.beginPath();
-  // arc(X, Y, Radius, Startwinkel, Endwinkel)
   ctx.arc(spitzeX, spitzeY, 16, 0, 2 * Math.PI);
   ctx.fillStyle = "#e74c3c";
   ctx.fill();
   ctx.strokeStyle = "#c0392b";
   ctx.lineWidth = 2;
   ctx.stroke();
+
   // ==========================================
-  // NEU: DAS ZWEITE PENDEL
+  // DAS ZWEITE PENDEL
   // ==========================================
 
   // 8. Spitze der zweiten Stange berechnen
-  // Der Startpunkt ist hierbei die Spitze der ersten Stange!
   const Stange_2nLaenge = 160;
   const spitze2X = spitzeX + Stange_2nLaenge * Math.sin(winkel2Rad);
-  const spitze2Y = spitzeY - Stange_2nLaenge * Math.cos(winkel2Rad); // Wieder Minus wegen Y-Achse
+  const spitze2Y = spitzeY - Stange_2nLaenge * Math.cos(winkel2Rad);
 
-  // 9. Stange 2 zeichnen (vielleicht etwas dunkler zur Unterscheidung)
+  // 9. Stange 2 zeichnen
   ctx.beginPath();
-  ctx.moveTo(spitzeX, spitzeY); // Startet exakt in der Mitte der ersten Kugel
-  ctx.lineTo(spitze2X, spitze2Y); // Geht zur neuen Spitze
+  ctx.moveTo(spitzeX, spitzeY);
+  ctx.lineTo(spitze2X, spitze2Y);
   ctx.strokeStyle = "#555";
   ctx.lineWidth = 6;
   ctx.stroke();
@@ -117,7 +173,7 @@ function zeichnePendel(wagenX: number, winkel1Rad: number, winkel2Rad: number) {
   // 10. Gewicht 2 zeichnen (z. B. ein oranger Kreis)
   ctx.beginPath();
   ctx.arc(spitze2X, spitze2Y, 16, 0, 2 * Math.PI);
-  ctx.fillStyle = "#e67e22"; // Orange
+  ctx.fillStyle = "#e67e22";
   ctx.fill();
   ctx.strokeStyle = "#d35400";
   ctx.lineWidth = 2;
@@ -126,3 +182,105 @@ function zeichnePendel(wagenX: number, winkel1Rad: number, winkel2Rad: number) {
 
 // Start-Bild zeichnen, bevor die Verbindung steht
 zeichnePendel(480, 0, 0);
+
+Restart_Button.addEventListener("click", () => {
+  let Message = new ServerMessage("Restart", "");
+  let JM = JSON.stringify(Message);
+  verbindung.send(JM);
+});
+
+// Hole die vorhandenen HTML-Elemente
+const uploadBtn = document.getElementById("Upload-Button") as HTMLButtonElement;
+
+uploadBtn.addEventListener("click", () => {
+  // 1. Verstecke das Canvas
+  canvas.style.display = "none";
+
+  // Prüfen, ob die Zone schon existiert (verhindert doppeltes Klicken)
+  if (document.getElementById("upload-zone")) return;
+
+  // 2. Erstelle den Drag & Drop Container
+  const uploadZone = document.createElement("div");
+  uploadZone.id = "upload-zone";
+  uploadZone.className = "upload-zone";
+
+  // HTML-Struktur innerhalb der Upload-Zone
+  uploadZone.innerHTML = `
+        <h2 class="upload-text">Datei hier ablegen<br>oder klicken, um den Explorer zu öffnen</h2>
+        <input type="file" id="file-input" style="display: none;" />
+        <p id="file-name" style="color: #666; font-family: sans-serif; font-weight: bold;"></p>
+        <button class="Send-Button" id="Send-Button">Senden</button>
+    `;
+
+  // Füge die Zone direkt nach den Buttons (vor dem Canvas) in den DOM ein
+  canvas.parentNode?.insertBefore(uploadZone, canvas);
+
+  // 3. Referenzen auf die neuen Elemente holen
+  const fileInput = uploadZone.querySelector("#file-input") as HTMLInputElement;
+  const sendBtn = uploadZone.querySelector("#Send-Button") as HTMLButtonElement;
+  const fileNameDisplay = uploadZone.querySelector(
+    "#file-name",
+  ) as HTMLParagraphElement;
+  let selectedFile: File | null = null;
+
+  // Funktion: UI updaten, wenn Datei ausgewählt wurde
+  const handleFile = (file: File) => {
+    selectedFile = file;
+    fileNameDisplay.textContent = `Ausgewählt: ${file.name}`;
+    sendBtn.style.display = "block"; // Senden-Button einblenden
+  };
+
+  // --- EVENT LISTENER FÜR DEN EXPLORER ---
+  uploadZone.addEventListener("click", (e) => {
+    // Öffne Explorer nur, wenn NICHT auf den Senden-Button geklickt wurde
+    if (e.target !== sendBtn) {
+      fileInput.click();
+    }
+  });
+
+  fileInput.addEventListener("change", (e) => {
+    const target = e.target as HTMLInputElement;
+    if (target.files && target.files.length > 0) {
+      handleFile(target.files[0]);
+    }
+  });
+
+  // --- EVENT LISTENER FÜR DRAG & DROP ---
+  uploadZone.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    uploadZone.classList.add("dragover");
+  });
+
+  uploadZone.addEventListener("dragleave", () => {
+    uploadZone.classList.remove("dragover");
+  });
+
+  uploadZone.addEventListener("drop", (e) => {
+    e.preventDefault();
+    uploadZone.classList.remove("dragover");
+
+    if (e.dataTransfer && e.dataTransfer.files.length > 0) {
+      handleFile(e.dataTransfer.files[0]);
+    }
+  });
+
+  // --- EVENT LISTENER FÜR DEN SENDEN-BUTTON ---
+  sendBtn.addEventListener("click", async (e) => {
+    e.stopPropagation(); // Verhindert, dass sich der Explorer nochmal öffnet
+
+    if (!selectedFile) return;
+
+    const text = await selectedFile.text();
+    const message = JSON.stringify(new ServerMessage("Upload", text));
+    verbindung.send(message);
+    // 4. Zurück zum Normalzustand (Upload-Zone löschen, Canvas zeigen)
+    uploadZone.remove();
+    canvas.style.display = "block";
+  });
+});
+
+Download_Button.addEventListener("click", () => {
+  let Message = new ServerMessage("Download", "");
+  let JM = JSON.stringify(Message);
+  verbindung.send(JM);
+});

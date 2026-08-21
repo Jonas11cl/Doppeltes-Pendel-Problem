@@ -15,6 +15,16 @@ double RandomZahl(double Anfang, double Ende)
     std::uniform_real_distribution<double> distrib(Anfang, Ende);
     return distrib(gen);
 }
+class RetrunKi
+{
+public:
+    double Gewichte_1[8];
+    double Gewichte_2[26];
+    double Gewichte_3[12];
+    double Bias1;
+    double Bias2;
+    double Bias3;
+};
 class HidenNode1
 {
 public:
@@ -99,27 +109,48 @@ public:
         Endsumme = 10.0 * std::tanh(Endsumme);
         return Endsumme;
     }
-    void Motiren(std::deque<double> BesteFitness, double bestfitness)
+    void Motiren(std::deque<double> BesteFitness, double bestfitness, std::deque<double> UberlebtSpiel1, std::deque<double> UberlebtSpiel2)
     {
         double MuttationsWarscheilichkeit = 0.05;
         double RadMax = 0.05;
         double RadMin = -0.05;
-        if (BesteFitness.size() >= 50)
+        if (sizeof(BesteFitness) >= 50)
         {
-            double Rundungsarry[10];
-            auto Stadtpunkt = BesteFitness.end() - 10;
-            std::copy(Stadtpunkt, BesteFitness.end(), Rundungsarry);
-            double Zahl = 0;
-            for (int i = 0; i < 10; i++)
+            if (sizeof(UberlebtSpiel1) >= 50 && sizeof(UberlebtSpiel1) >= 50)
             {
-                Zahl += Rundungsarry[i];
-            }
-            Zahl = Zahl / 10;
-            if (Zahl + 100 > bestfitness)
-            {
-                MuttationsWarscheilichkeit = 0.15;
-                RadMax = 0.15;
-                RadMin = -0.15;
+                double UberlbesArray1[10];
+                double UberlbesArray2[10];
+
+                auto StadrdpunktS1 = UberlebtSpiel1.end() - 10;
+                auto StadrdpunktS2 = UberlebtSpiel1.end() - 10;
+                std::copy(StadrdpunktS1, UberlebtSpiel1.end(), UberlbesArray1);
+                std::copy(StadrdpunktS2, UberlebtSpiel2.end(), UberlbesArray2);
+                double Rundungsarry[10];
+                auto Stadtpunkt = BesteFitness.end() - 10;
+                std::copy(Stadtpunkt, BesteFitness.end(), Rundungsarry);
+                double Zahl = 0;
+                double ZahlS1 = 0;
+                double ZahlS2 = 0;
+                for (int i = 0; i < 10; i++)
+                {
+                    Zahl += Rundungsarry[i];
+                    ZahlS1 += UberlbesArray1[i];
+                    ZahlS2 += UberlbesArray2[i];
+                }
+                double ZahlZ = (ZahlS1 + ZahlS2) / 2;
+                Zahl = Zahl / 10;
+                if (Zahl + 100 > bestfitness && ZahlZ < 6500)
+                {
+                    MuttationsWarscheilichkeit = 0.15;
+                    RadMax = 0.15;
+                    RadMin = -0.15;
+                }
+                else if (ZahlZ > 7200)
+                {
+                    MuttationsWarscheilichkeit = 0.01;
+                    RadMax = 0.01;
+                    RadMin = -0.01;
+                }
             }
         }
         double NeueKiWarscheilichkeit = 0.1;
@@ -194,7 +225,9 @@ int main()
     }
     bool trainingFertig = false;
     std::deque<double> BesteFitnness;
-    for (int gen = 0; gen < 10000; gen++)
+    std::deque<double> Spiel_1_UL;
+    std::deque<double> Spiel_2_UL;
+    for (int gen = 0; gen < 7500; gen++)
     {
 
         double Winkel_Stange_1_0 = RandomZahl(-0.08, 0.08);
@@ -280,15 +313,29 @@ int main()
             BesteKi[e] = Ki[index];
         }
 
-        std::cout << "Generation " << gen << " - Beste Fitness: " << BesteKi[0].Fitness << " - Updates Überlebet Spiel 1:" << MeistenUpdates[0] << " - Updates Überlebet Spiel 2:" << MeistenUpdates[1] << std::endl;
+        std::cout << "Generation " << gen << " - Beste Fitness: " << BesteKi[0].Fitness << " - Updates Uberlebet Spiel 1:" << MeistenUpdates[0] << " - Updates Uberlebet Spiel 2:" << MeistenUpdates[1] << std::endl;
         if (BesteFitnness.size() >= 50)
         {
             BesteFitnness.pop_back();
         }
         BesteFitnness.push_front(BesteKi[0].Fitness);
+        if (Spiel_1_UL.size() >= 50)
+        {
+            Spiel_1_UL.pop_back();
+        }
+        Spiel_1_UL.push_front(MeistenUpdates[0]);
+
+        if (Spiel_2_UL.size() >= 50)
+        {
+            Spiel_2_UL.pop_back();
+        }
+        Spiel_2_UL.push_front(MeistenUpdates[1]);
+
         if (gen == 500 || gen == 1200)
         {
             BesteFitnness.clear();
+            Spiel_1_UL.clear();
+            Spiel_2_UL.clear();
         }
         for (int f = 0; f < 5; f++)
         {
@@ -301,7 +348,7 @@ int main()
                 int Rand = RandomZahl(0, 4);
 
                 Ki[e] = BesteKi[Rand];
-                Ki[e].Motiren(BesteFitnness, BesteKi[0].Fitness);
+                Ki[e].Motiren(BesteFitnness, BesteKi[0].Fitness, Spiel_1_UL, Spiel_2_UL);
             }
         }
     }
@@ -316,7 +363,9 @@ extern "C" __declspec(dllexport) void StarteTraining()
     }
     bool trainingFertig = false;
     std::deque<double> BesteFitnness;
-    for (int gen = 0; gen < 10000; gen++)
+    std::deque<double> Spiel_1_UL;
+    std::deque<double> Spiel_2_UL;
+    for (int gen = 0; gen < 7500; gen++)
     {
 
         double Winkel_Stange_1_0 = RandomZahl(-0.08, 0.08);
@@ -402,15 +451,29 @@ extern "C" __declspec(dllexport) void StarteTraining()
             BesteKi[e] = Ki[index];
         }
 
-        std::cout << "Generation " << gen << " - Beste Fitness: " << BesteKi[0].Fitness << " - Updates Überlebet Spiel 1:" << MeistenUpdates[0] << " - Updates Überlebet Spiel 2:" << MeistenUpdates[1] << std::endl;
+        std::cout << "Generation " << gen << " - Beste Fitness: " << BesteKi[0].Fitness << " - Updates Uberlebet Spiel 1:" << MeistenUpdates[0] << " - Updates Uberlebet Spiel 2:" << MeistenUpdates[1] << std::endl;
         if (BesteFitnness.size() >= 50)
         {
             BesteFitnness.pop_back();
         }
         BesteFitnness.push_front(BesteKi[0].Fitness);
+        if (Spiel_1_UL.size() >= 50)
+        {
+            Spiel_1_UL.pop_back();
+        }
+        Spiel_1_UL.push_front(MeistenUpdates[0]);
+
+        if (Spiel_2_UL.size() >= 50)
+        {
+            Spiel_2_UL.pop_back();
+        }
+        Spiel_2_UL.push_front(MeistenUpdates[1]);
+
         if (gen == 500 || gen == 1200)
         {
             BesteFitnness.clear();
+            Spiel_1_UL.clear();
+            Spiel_2_UL.clear();
         }
         for (int f = 0; f < 5; f++)
         {
@@ -423,7 +486,7 @@ extern "C" __declspec(dllexport) void StarteTraining()
                 int Rand = RandomZahl(0, 4);
 
                 Ki[e] = BesteKi[Rand];
-                Ki[e].Motiren(BesteFitnness, BesteKi[0].Fitness);
+                Ki[e].Motiren(BesteFitnness, BesteKi[0].Fitness, Spiel_1_UL, Spiel_2_UL);
             }
         }
     }
@@ -450,4 +513,44 @@ extern "C" __declspec(dllexport) double HoleWinkel1()
 extern "C" __declspec(dllexport) double HoleWinkel2()
 {
     return lokalesSpiel.Winkel_Stange_2;
+}
+
+extern "C" __declspec(dllexport) RetrunKi HoleKi()
+{
+    RetrunKi KiAusgeben;
+    for (int i = 0; i < 8; i++)
+    {
+        KiAusgeben.Gewichte_1[i] = BesteKi->HidelLayer_1->Gewichte[i];
+    }
+    for (int i = 0; i < 26; i++)
+    {
+        KiAusgeben.Gewichte_2[i] = BesteKi->HidenLayer_2->Gewichte[i];
+    }
+    for (int i = 0; i < 12; i++)
+    {
+        KiAusgeben.Gewichte_3[i] = BesteKi->Endgewichte[i];
+    }
+    KiAusgeben.Bias1 = BesteKi->HidelLayer_1->Bias;
+    KiAusgeben.Bias2 = BesteKi->HidenLayer_2->Bias;
+    KiAusgeben.Bias3 = BesteKi->Bias;
+    return KiAusgeben;
+}
+
+extern "C" __declspec(dllexport) void GetKiC(RetrunKi NeueKi)
+{
+    BesteKi->HidelLayer_1->Bias = NeueKi.Bias1;
+    BesteKi->HidenLayer_2->Bias = NeueKi.Bias2;
+    BesteKi->Bias = NeueKi.Bias3;
+    for (int i = 0; i < 8; i++)
+    {
+        BesteKi->HidelLayer_1->Gewichte[i] = NeueKi.Gewichte_1[i];
+    }
+    for (int i = 0; i < 26; i++)
+    {
+        BesteKi->HidenLayer_2->Gewichte[i] = NeueKi.Gewichte_2[i];
+    }
+    for (int i = 0; i < 12; i++)
+    {
+        BesteKi->Endgewichte[i] = NeueKi.Gewichte_3[i];
+    }
 }
