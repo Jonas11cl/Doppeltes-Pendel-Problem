@@ -1,3 +1,7 @@
+import { Chart, registerables } from "chart.js";
+
+Chart.register(...registerables);
+
 const canvas = document.getElementById("pendelCanvas") as HTMLCanvasElement;
 canvas.width = 960;
 canvas.height = 560;
@@ -8,6 +12,20 @@ const Restart_Button = document.getElementById(
 const Download_Button = document.getElementById(
   "Download-Button",
 ) as HTMLButtonElement;
+const Stardt_Boutton = document.getElementById(
+  `Starte-Button`,
+) as HTMLButtonElement;
+const stopButton = document.getElementById("Stop-Button") as HTMLButtonElement;
+const trainingPanel = document.getElementById("training-panel") as HTMLElement;
+const generationValue = document.getElementById(
+  "generation-value",
+) as HTMLElement;
+const fitnessCanvas = document.getElementById(
+  "fitness-chart",
+) as HTMLCanvasElement;
+const survivalCanvas = document.getElementById(
+  "survival-chart",
+) as HTMLCanvasElement;
 // Verbindung zum C# Server
 const verbindung = new WebSocket("ws://127.0.0.1:8080");
 
@@ -19,6 +37,92 @@ interface ChatMessage {
   Winkel2: number;
 }
 
+interface Trainigsmessge {
+  Version: number;
+  Generation: number;
+  BesteFitness: number;
+  UeberlebtSpiel1: number;
+  UeberlebtSpiel2: number;
+}
+
+const fitnessData: number[] = [];
+const survivalGameOneData: number[] = [];
+const survivalGameTwoData: number[] = [];
+const generations: string[] = [];
+
+const chartOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  animation: { duration: 350 },
+  plugins: { legend: { labels: { color: "#d7e1e8" } } },
+  scales: {
+    x: { ticks: { color: "#93a5b1" }, grid: { color: "#29404a" } },
+    y: { ticks: { color: "#93a5b1" }, grid: { color: "#29404a" } },
+  },
+};
+
+const fitnessChart = new Chart(fitnessCanvas, {
+  type: "line",
+  data: {
+    labels: generations,
+    datasets: [
+      {
+        label: "Fitness",
+        data: fitnessData,
+        borderColor: "#66e3b4",
+        backgroundColor: "rgba(102, 227, 180, 0.14)",
+        fill: true,
+        tension: 0.35,
+      },
+    ],
+  },
+  options: chartOptions,
+});
+
+const survivalChart = new Chart(survivalCanvas, {
+  type: "line",
+  data: {
+    labels: generations,
+    datasets: [
+      {
+        label: "Spiel 1",
+        data: survivalGameOneData,
+        borderColor: "#ffb45c",
+        tension: 0.35,
+      },
+      {
+        label: "Spiel 2",
+        data: survivalGameTwoData,
+        borderColor: "#78b7ff",
+        tension: 0.35,
+      },
+    ],
+  },
+  options: chartOptions,
+});
+
+function zeigeTrainingsdaten(message: Trainigsmessge): void {
+  generations.push(String(message.Generation));
+  fitnessData.push(message.BesteFitness);
+  survivalGameOneData.push(message.UeberlebtSpiel1);
+  survivalGameTwoData.push(message.UeberlebtSpiel2);
+
+  if (generations.length > 100) {
+    generations.shift();
+    fitnessData.shift();
+    survivalGameOneData.shift();
+    survivalGameTwoData.shift();
+  }
+
+  generationValue.textContent = String(message.Generation);
+  fitnessChart.update();
+  survivalChart.update();
+}
+
+function aktualisiereChartGroesse(): void {
+  fitnessChart.resize();
+  survivalChart.resize();
+}
 class ServerMessage {
   Aktion: string;
   Inhalt: string;
@@ -72,8 +176,12 @@ verbindung.addEventListener("message", (event) => {
 
       // Nutzt das Feld "KiDaten" aus Ihrem C#-Code und speichert es direkt als Datei
       downloadJsonString(message.KiDaten, "Ki.json");
+    } else if (rohDaten.Version === 3) {
+      const message = rohDaten as Trainigsmessge;
+      zeigeTrainingsdaten(message);
     } else {
       console.warn("Unbekannte Paket-Version erhalten:", rohDaten.Version);
+      console.log(rohDaten);
     }
   } catch (error) {
     console.error("Fehler beim Parsen:", error);
@@ -283,4 +391,30 @@ Download_Button.addEventListener("click", () => {
   let Message = new ServerMessage("Download", "");
   let JM = JSON.stringify(Message);
   verbindung.send(JM);
+});
+
+Stardt_Boutton.addEventListener("click", () => {
+  canvas.style.display = "none";
+  trainingPanel.hidden = false;
+  requestAnimationFrame(aktualisiereChartGroesse);
+  Stardt_Boutton.hidden = true;
+  stopButton.hidden = false;
+  generations.length = 0;
+  fitnessData.length = 0;
+  survivalGameOneData.length = 0;
+  survivalGameTwoData.length = 0;
+  fitnessChart.update();
+  survivalChart.update();
+  let Message = new ServerMessage("Starte Training", "");
+  let JM = JSON.stringify(Message);
+  verbindung.send(JM);
+});
+
+stopButton.addEventListener("click", () => {
+  let Message = new ServerMessage("Stoppe Training", "");
+  verbindung.send(JSON.stringify(Message));
+  trainingPanel.hidden = true;
+  canvas.style.display = "block";
+  Stardt_Boutton.hidden = false;
+  stopButton.hidden = true;
 });

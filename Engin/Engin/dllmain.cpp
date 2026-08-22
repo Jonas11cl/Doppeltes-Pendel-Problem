@@ -8,6 +8,19 @@
 #include <vector>
 #include <algorithm>
 #include <deque>
+#include <mutex>
+#include <atomic>
+struct TrainingsStatus
+{
+    int Generation;
+    double BesteFitness;
+    int UeberlebtSpiel1;
+    int UeberlebtSpiel2;
+};
+
+TrainingsStatus aktuellerTrainingsStatus{0, 0.0, 0, 0};
+std::mutex trainingsStatusMutex;
+
 double RandomZahl(double Anfang, double Ende)
 {
     static std::random_device rd;
@@ -18,11 +31,11 @@ double RandomZahl(double Anfang, double Ende)
 class RetrunKi
 {
 public:
-    double Gewichte_1[8];
-    double Gewichte_2[26];
+    double Gewichte_1[26][8];
+    double Biases_1[26];
+    double Gewichte_2[12][26];
+    double Biases_2[12];
     double Gewichte_3[12];
-    double Bias1;
-    double Bias2;
     double Bias3;
 };
 class HidenNode1
@@ -109,48 +122,35 @@ public:
         Endsumme = 10.0 * std::tanh(Endsumme);
         return Endsumme;
     }
-    void Motiren(std::deque<double> BesteFitness, double bestfitness, std::deque<double> UberlebtSpiel1, std::deque<double> UberlebtSpiel2)
+    void Motiren(const std::deque<double> &BesteFitness, double bestfitness, const std::deque<double> &UberlebtSpiel1, const std::deque<double> &UberlebtSpiel2)
     {
         double MuttationsWarscheilichkeit = 0.05;
         double RadMax = 0.05;
         double RadMin = -0.05;
-        if (sizeof(BesteFitness) >= 50)
-        {
-            if (sizeof(UberlebtSpiel1) >= 50 && sizeof(UberlebtSpiel1) >= 50)
-            {
-                double UberlbesArray1[10];
-                double UberlbesArray2[10];
 
-                auto StadrdpunktS1 = UberlebtSpiel1.end() - 10;
-                auto StadrdpunktS2 = UberlebtSpiel1.end() - 10;
-                std::copy(StadrdpunktS1, UberlebtSpiel1.end(), UberlbesArray1);
-                std::copy(StadrdpunktS2, UberlebtSpiel2.end(), UberlbesArray2);
-                double Rundungsarry[10];
-                auto Stadtpunkt = BesteFitness.end() - 10;
-                std::copy(Stadtpunkt, BesteFitness.end(), Rundungsarry);
-                double Zahl = 0;
-                double ZahlS1 = 0;
-                double ZahlS2 = 0;
-                for (int i = 0; i < 10; i++)
-                {
-                    Zahl += Rundungsarry[i];
-                    ZahlS1 += UberlbesArray1[i];
-                    ZahlS2 += UberlbesArray2[i];
-                }
-                double ZahlZ = (ZahlS1 + ZahlS2) / 2;
-                Zahl = Zahl / 10;
-                if (Zahl + 100 > bestfitness && ZahlZ < 6500)
-                {
-                    MuttationsWarscheilichkeit = 0.15;
-                    RadMax = 0.15;
-                    RadMin = -0.15;
-                }
-                else if (ZahlZ > 7200)
-                {
-                    MuttationsWarscheilichkeit = 0.01;
-                    RadMax = 0.01;
-                    RadMin = -0.01;
-                }
+        if (BesteFitness.size() >= 10 && UberlebtSpiel1.size() >= 10 && UberlebtSpiel2.size() >= 10)
+        {
+            double Zahl = 0, ZahlS1 = 0, ZahlS2 = 0;
+            for (int i = 0; i < 10; i++)
+            {
+                Zahl += BesteFitness[i];
+                ZahlS1 += UberlebtSpiel1[i];
+                ZahlS2 += UberlebtSpiel2[i];
+            }
+            double ZahlZ = (ZahlS1 + ZahlS2) / 2.0;
+            Zahl /= 10.0;
+
+            if (Zahl + 100 > bestfitness && ZahlZ < 6500)
+            {
+                MuttationsWarscheilichkeit = 0.15;
+                RadMax = 0.15;
+                RadMin = -0.15;
+            }
+            else if (ZahlZ >= 7000) // Mikromutation zur Verfeinerung
+            {
+                MuttationsWarscheilichkeit = 0.01;
+                RadMax = 0.01;
+                RadMin = -0.01;
             }
         }
         double NeueKiWarscheilichkeit = 0.1;
@@ -214,7 +214,7 @@ public:
         }
     }
 };
-
+std::atomic<bool> training{false};
 NuralNetwork Ki[750];
 NuralNetwork BesteKi[5];
 int main()
@@ -223,13 +223,14 @@ int main()
     {
         Ki[i] = NuralNetwork();
     }
+    int gen = 0;
     bool trainingFertig = false;
     std::deque<double> BesteFitnness;
     std::deque<double> Spiel_1_UL;
     std::deque<double> Spiel_2_UL;
-    for (int gen = 0; gen < 7500; gen++)
+    while (training == true)
     {
-
+        gen++;
         double Winkel_Stange_1_0 = RandomZahl(-0.08, 0.08);
         double Winkel_Stange_2_0 = RandomZahl(-0.08, 0.08);
         double Winkel_Stange_1_1;
@@ -314,6 +315,10 @@ int main()
         }
 
         std::cout << "Generation " << gen << " - Beste Fitness: " << BesteKi[0].Fitness << " - Updates Uberlebet Spiel 1:" << MeistenUpdates[0] << " - Updates Uberlebet Spiel 2:" << MeistenUpdates[1] << std::endl;
+        {
+            std::lock_guard<std::mutex> lock(trainingsStatusMutex);
+            aktuellerTrainingsStatus = {gen, BesteKi[0].Fitness, MeistenUpdates[0], MeistenUpdates[1]};
+        }
         if (BesteFitnness.size() >= 50)
         {
             BesteFitnness.pop_back();
@@ -361,13 +366,14 @@ extern "C" __declspec(dllexport) void StarteTraining()
     {
         Ki[i] = NuralNetwork();
     }
+    int gen = 0;
     bool trainingFertig = false;
     std::deque<double> BesteFitnness;
     std::deque<double> Spiel_1_UL;
     std::deque<double> Spiel_2_UL;
-    for (int gen = 0; gen < 7500; gen++)
+    while (training == true)
     {
-
+        gen++;
         double Winkel_Stange_1_0 = RandomZahl(-0.08, 0.08);
         double Winkel_Stange_2_0 = RandomZahl(-0.08, 0.08);
         double Winkel_Stange_1_1;
@@ -425,10 +431,22 @@ extern "C" __declspec(dllexport) void StarteTraining()
                         break;
                     }
                 }
+                // In der OpenMP-Schleife beim Aktualisieren der Updates:
                 if (Updates > MeistenUpdates[Spiel])
                 {
-                    MeistenUpdates[Spiel] = Updates;
+#pragma omp critical
+                    {
+                        if (Updates > MeistenUpdates[Spiel])
+                        {
+                            MeistenUpdates[Spiel] = Updates;
+                        }
+                    }
                 }
+
+                // Bei der Eliten-Auswahl in der Mutationsschleife:
+                int Rand = static_cast<int>(RandomZahl(0.0, 5.0));
+                if (Rand > 4)
+                    Rand = 4; // Garantiert Indizes 0 bis 4
             }
         }
 
@@ -452,6 +470,10 @@ extern "C" __declspec(dllexport) void StarteTraining()
         }
 
         std::cout << "Generation " << gen << " - Beste Fitness: " << BesteKi[0].Fitness << " - Updates Uberlebet Spiel 1:" << MeistenUpdates[0] << " - Updates Uberlebet Spiel 2:" << MeistenUpdates[1] << std::endl;
+        {
+            std::lock_guard<std::mutex> lock(trainingsStatusMutex);
+            aktuellerTrainingsStatus = {gen, BesteKi[0].Fitness, MeistenUpdates[0], MeistenUpdates[1]};
+        }
         if (BesteFitnness.size() >= 50)
         {
             BesteFitnness.pop_back();
@@ -483,7 +505,11 @@ extern "C" __declspec(dllexport) void StarteTraining()
         {
             if (e >= 5)
             {
-                int Rand = RandomZahl(0, 4);
+                int Rand = static_cast<int>(RandomZahl(0.0, 5.0));
+                if (Rand > 4)
+                {
+                    Rand = 4;
+                }
 
                 Ki[e] = BesteKi[Rand];
                 Ki[e].Motiren(BesteFitnness, BesteKi[0].Fitness, Spiel_1_UL, Spiel_2_UL);
@@ -518,39 +544,76 @@ extern "C" __declspec(dllexport) double HoleWinkel2()
 extern "C" __declspec(dllexport) RetrunKi HoleKi()
 {
     RetrunKi KiAusgeben;
-    for (int i = 0; i < 8; i++)
+    for (int e = 0; e < 26; e++)
     {
-        KiAusgeben.Gewichte_1[i] = BesteKi->HidelLayer_1->Gewichte[i];
+        KiAusgeben.Biases_1[e] = BesteKi[0].HidelLayer_1[e].Bias;
+        for (int i = 0; i < 8; i++)
+        {
+            KiAusgeben.Gewichte_1[e][i] = BesteKi[0].HidelLayer_1[e].Gewichte[i];
+        }
     }
-    for (int i = 0; i < 26; i++)
+    for (int e = 0; e < 12; e++)
     {
-        KiAusgeben.Gewichte_2[i] = BesteKi->HidenLayer_2->Gewichte[i];
+        KiAusgeben.Biases_2[e] = BesteKi[0].HidenLayer_2[e].Bias;
+        for (int i = 0; i < 26; i++)
+        {
+            KiAusgeben.Gewichte_2[e][i] = BesteKi[0].HidenLayer_2[e].Gewichte[i];
+        }
     }
     for (int i = 0; i < 12; i++)
     {
-        KiAusgeben.Gewichte_3[i] = BesteKi->Endgewichte[i];
+        KiAusgeben.Gewichte_3[i] = BesteKi[0].Endgewichte[i];
     }
-    KiAusgeben.Bias1 = BesteKi->HidelLayer_1->Bias;
-    KiAusgeben.Bias2 = BesteKi->HidenLayer_2->Bias;
-    KiAusgeben.Bias3 = BesteKi->Bias;
+    KiAusgeben.Bias3 = BesteKi[0].Bias;
     return KiAusgeben;
 }
 
 extern "C" __declspec(dllexport) void GetKiC(RetrunKi NeueKi)
 {
-    BesteKi->HidelLayer_1->Bias = NeueKi.Bias1;
-    BesteKi->HidenLayer_2->Bias = NeueKi.Bias2;
-    BesteKi->Bias = NeueKi.Bias3;
-    for (int i = 0; i < 8; i++)
+
+    for (int e = 0; e < 26; e++)
     {
-        BesteKi->HidelLayer_1->Gewichte[i] = NeueKi.Gewichte_1[i];
+        BesteKi[0].HidelLayer_1[e].Bias = NeueKi.Biases_1[e];
+        for (int i = 0; i < 8; i++)
+        {
+            BesteKi[0].HidelLayer_1[e].Gewichte[i] = NeueKi.Gewichte_1[e][i];
+        }
     }
-    for (int i = 0; i < 26; i++)
+
+    for (int e = 0; e < 12; e++)
     {
-        BesteKi->HidenLayer_2->Gewichte[i] = NeueKi.Gewichte_2[i];
+        BesteKi[0].HidenLayer_2[e].Bias = NeueKi.Biases_2[e];
+        for (int i = 0; i < 26; i++)
+        {
+            BesteKi[0].HidenLayer_2[e].Gewichte[i] = NeueKi.Gewichte_2[e][i];
+        }
     }
+
     for (int i = 0; i < 12; i++)
     {
-        BesteKi->Endgewichte[i] = NeueKi.Gewichte_3[i];
+        BesteKi[0].Endgewichte[i] = NeueKi.Gewichte_3[i];
     }
+
+    BesteKi[0].Bias = NeueKi.Bias3;
+}
+
+extern "C" __declspec(dllexport) void StarteTrainning()
+{
+    training = true;
+}
+
+extern "C" __declspec(dllexport) void StoppeTrainning()
+{
+    training = false;
+}
+
+extern "C" __declspec(dllexport) void HoleTrainingsStatus(TrainingsStatus *status)
+{
+    if (status == nullptr)
+    {
+        return;
+    }
+
+    std::lock_guard<std::mutex> lock(trainingsStatusMutex);
+    *status = aktuellerTrainingsStatus;
 }

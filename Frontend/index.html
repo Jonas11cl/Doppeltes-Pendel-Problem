@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="de">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -9,6 +9,9 @@
   <body>
     <div class="Buttons">
       <button class="Starte-Button" id="Starte-Button">Training Starten</button>
+      <button class="Stop-Button" id="Stop-Button" hidden>
+        Training Stoppen
+      </button>
       <button class="Reset-Button" id="Reset-Button">Reset</button>
       <button class="Upload-Button" id="Upload-Button">Ki Hochladen</button>
       <button class="Download-Button" id="Download-Button">
@@ -16,6 +19,28 @@
       </button>
     </div>
     <canvas id="pendelCanvas"></canvas>
+    <section class="training-panel" id="training-panel" hidden>
+      <div class="training-heading">
+        <div>
+          <p class="eyebrow">Evolution läuft</p>
+          <h1>Trainingsübersicht</h1>
+        </div>
+        <div class="generation-box">
+          <span>Generation</span>
+          <strong id="generation-value">0</strong>
+        </div>
+      </div>
+      <div class="chart-grid">
+        <article class="chart-card">
+          <h2>Beste Fitness</h2>
+          <div class="chart-wrap"><canvas id="fitness-chart"></canvas></div>
+        </article>
+        <article class="chart-card">
+          <h2>Überlebte Updates</h2>
+          <div class="chart-wrap"><canvas id="survival-chart"></canvas></div>
+        </article>
+      </div>
+    </section>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
