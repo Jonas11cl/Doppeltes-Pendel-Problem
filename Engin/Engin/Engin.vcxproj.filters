@@ -18,9 +18,6 @@
     <ClInclude Include="framework.h">
       <Filter>Headerdateien</Filter>
     </ClInclude>
-    <ClInclude Include="pch.h">
-      <Filter>Headerdateien</Filter>
-    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="dllmain.cpp">

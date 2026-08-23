@@ -80,7 +80,15 @@ body {
   height: 30px;
   width: 120px;
 }
-
+.NT-Button {
+  background-color: #adca0b;
+  border-radius: 8px;
+  border-width: 1px;
+  border-style: solid;
+  border-color: #4b4b4b;
+  height: 30px;
+  width: 120px;
+}
 .Stop-Button {
   background-color: #f08a5d;
   border: 1px solid #4b4b4b;
@@ -219,7 +227,7 @@ h2 {
 .Starte-Button:hover,
 .Reset-Button:hover,
 .Download-Button:hover,
-.Stop-Button:hover {
+.Stop-Button:hover .NT-Button {
   filter: brightness(1.1);
   cursor: pointer;
 }

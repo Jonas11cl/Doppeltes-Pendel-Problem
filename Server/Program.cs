@@ -105,11 +105,15 @@ class Program
     public static extern void StarteTrainning();
 
     [DllImport("Engin.dll", CallingConvention = CallingConvention.Cdecl)]
+    public static extern void TrainingNeuStarten();
+
+    [DllImport("Engin.dll", CallingConvention = CallingConvention.Cdecl)]
     public static extern void HoleTrainingsStatus(out TrainingsStatus status);
 
     private static readonly SemaphoreSlim ersterClientTor = new SemaphoreSlim(0);
     private static int torSchonOffen = 0;
-    public static bool Running = true;
+    private static bool Running = true;
+    private static bool TrainingAktive = false;
     private static CancellationTokenSource? trainingStatusAbbruch;
     private static Task? trainingTask;
 
@@ -181,32 +185,60 @@ class Program
                 }
                 else if (NewMesssage.Aktion == "Starte Training")
                 {
+                    if (TrainingAktive != true)
+                    {
+                        Running = false;
+                        TrainingAktive = true;
+                        await Task.Delay(50);
+
+                        StarteTrainning();
+
+                        // Startet die eigentliche Trainingsschleife
+                        trainingTask = Task.Run(() => StarteTraining());
+
+                        trainingStatusAbbruch?.Cancel();
+                        trainingStatusAbbruch = new CancellationTokenSource();
+                        _ = SendeTrainingsStatus(clients, trainingStatusAbbruch.Token);
+                    }
+                }
+                else if (NewMesssage.Aktion == "Stoppe Training")
+                {
+                    if (TrainingAktive != false)
+                    {
+                        TrainingAktive = false;
+                        StoppeTrainning();
+                        if (trainingTask != null)
+                        {
+                            await trainingTask;
+                            trainingTask = null;
+                        }
+                        trainingStatusAbbruch?.Cancel();
+                        Running = true;
+                        _ = updateLoop(clients);
+                    }
+                }
+                else if (NewMesssage.Aktion == "Training Neustarten")
+                {
+                    if (TrainingAktive)
+                    {
+                        TrainingAktive = false;
+                        StoppeTrainning();
+                        if (trainingTask != null)
+                        {
+                            await trainingTask;
+                            trainingTask = null;
+                        }
+                    }
+
+                    TrainingNeuStarten();
                     Running = false;
-
-                    await Task.Delay(50);
-
+                    TrainingAktive = true;
                     StarteTrainning();
-
-                    // Startet die eigentliche Trainingsschleife
                     trainingTask = Task.Run(() => StarteTraining());
 
                     trainingStatusAbbruch?.Cancel();
                     trainingStatusAbbruch = new CancellationTokenSource();
                     _ = SendeTrainingsStatus(clients, trainingStatusAbbruch.Token);
-                }
-                else if (NewMesssage.Aktion == "Stoppe Training")
-                {
-                    StoppeTrainning();
-                    if (trainingTask != null)
-                    {
-                        await trainingTask;
-                        trainingTask = null;
-                    }
-                    trainingStatusAbbruch?.Cancel();
-                    Running = true;
-
-                    // Im Hintergrund starten, damit der WebSocket empfangsbereit bleibt
-                    _ = updateLoop(clients);
                 }
             };
         });
@@ -298,10 +330,7 @@ class Program
                 await Task.Delay(100, abbruch);
             }
         }
-        catch (OperationCanceledException)
-        {
-            // Erwartet: Der Status-Task wird beim Stoppen abgebrochen.
-        }
+        catch (OperationCanceledException) { }
         catch (Exception ex)
         {
             Console.WriteLine("Fehler beim Lesen des Trainingsstatus: " + ex.Message);
@@ -310,8 +339,6 @@ class Program
 
     public static async Task updateLoop(ConcurrentDictionary<IWebSocketConnection, byte> clients)
     {
-        // WICHTIG: Blockiert hier nur beim ALLERERSTEN Startvorgang.
-        // Wenn das Tor schon offen ist (nach "Stoppe Training"), läuft die App direkt weiter!
         if (torSchonOffen == 0)
         {
             await ersterClientTor.WaitAsync();

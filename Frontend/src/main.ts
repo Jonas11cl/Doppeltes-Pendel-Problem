@@ -26,9 +26,13 @@ const fitnessCanvas = document.getElementById(
 const survivalCanvas = document.getElementById(
   "survival-chart",
 ) as HTMLCanvasElement;
+const NTButton = document.getElementById("NT-Button") as HTMLButtonElement;
+const WeiterButton = document.getElementById(
+  "Weiter-Button",
+) as HTMLButtonElement;
 // Verbindung zum C# Server
 const verbindung = new WebSocket("ws://127.0.0.1:8080");
-
+let TriningSchonGesrted = false;
 // Interface passt zu Ihrer C#-Klasse "DatenPaket"
 interface ChatMessage {
   Version: number;
@@ -398,7 +402,13 @@ Stardt_Boutton.addEventListener("click", () => {
   trainingPanel.hidden = false;
   requestAnimationFrame(aktualisiereChartGroesse);
   Stardt_Boutton.hidden = true;
+  Restart_Button.hidden = true;
+  uploadBtn.hidden = true;
+  WeiterButton.hidden = true;
+  Download_Button.hidden = true;
+  NTButton.hidden = false;
   stopButton.hidden = false;
+  TriningSchonGesrted = true;
   generations.length = 0;
   fitnessData.length = 0;
   survivalGameOneData.length = 0;
@@ -414,7 +424,43 @@ stopButton.addEventListener("click", () => {
   let Message = new ServerMessage("Stoppe Training", "");
   verbindung.send(JSON.stringify(Message));
   trainingPanel.hidden = true;
+  if (TriningSchonGesrted === true) {
+    WeiterButton.hidden = false;
+  } else {
+    Stardt_Boutton.hidden = false;
+  }
   canvas.style.display = "block";
-  Stardt_Boutton.hidden = false;
+  Restart_Button.hidden = false;
+  uploadBtn.hidden = false;
+  Download_Button.hidden = false;
+  NTButton.hidden = true;
   stopButton.hidden = true;
+});
+
+NTButton.addEventListener("click", () => {
+  let Message = new ServerMessage("Training Neustarten", "");
+  verbindung.send(JSON.stringify(Message));
+});
+
+WeiterButton.addEventListener("click", () => {
+  canvas.style.display = "none";
+  trainingPanel.hidden = false;
+  requestAnimationFrame(aktualisiereChartGroesse);
+  Stardt_Boutton.hidden = true;
+  Restart_Button.hidden = true;
+  WeiterButton.hidden = true;
+  uploadBtn.hidden = true;
+  Download_Button.hidden = true;
+  NTButton.hidden = false;
+  stopButton.hidden = false;
+  TriningSchonGesrted = true;
+  generations.length = 0;
+  fitnessData.length = 0;
+  survivalGameOneData.length = 0;
+  survivalGameTwoData.length = 0;
+  fitnessChart.update();
+  survivalChart.update();
+  let Message = new ServerMessage("Starte Training", "");
+  let JM = JSON.stringify(Message);
+  verbindung.send(JM);
 });
