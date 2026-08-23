@@ -81,9 +81,11 @@ public:
     double Bias;
     double Fitness;
 
+    // NEU: Wir speichern die Updates für jede KI einzeln!
     int UpdatesS1 = 0;
     int UpdatesS2 = 0;
 
+    // NEU: Rohe (unnormierte) Fitness pro Spiel, nur fürs Debuggen/Logging interessant
     double FitnessS1 = 0.0;
     double FitnessS2 = 0.0;
 
@@ -244,6 +246,7 @@ MeineKlasse lokalesSpiel;
 
 int gen = 0;
 bool trainingFertig = false;
+int GenerationenSeitLetzterErhoehung = 0; // NEU: Cooldown für LimitUpdates-Erhöhung
 std::deque<double> BesteFitnness;
 std::deque<double> Spiel_1_UL;
 std::deque<double> Spiel_2_UL;
@@ -433,13 +436,27 @@ extern "C" __declspec(dllexport) void StarteTraining()
                 ZahlS1 += Spiel_1_UL[i];
                 ZahlS2 += Spiel_2_UL[i];
             }
-            double ZahlZ = (ZahlS1 / 10.0 + ZahlS2 / 10.0) / 2.0;
+            ZahlS1 /= 10.0;
+            ZahlS2 /= 10.0;
 
-            if (ZahlZ >= LimitUpdates - 10)
+            // NEU: Minimum statt Durchschnitt. Beim Durchschnitt konnte das leichte
+            // Spiel 1 (fast schon am Limit) die Schwelle allein hochziehen, obwohl
+            // Spiel 2 noch weit hinterherhinkt -> das Limit stieg schneller, als die
+            // Population (v.a. bei Spiel 2) tatsächlich mithalten konnte.
+            double ZahlZ = std::min(ZahlS1, ZahlS2);
+
+            GenerationenSeitLetzterErhoehung++;
+
+            const double SchwellenProzentLimitErhoehen = 0.75; // anpassbar
+            const int CooldownGenerationen = 15;               // NEU: nicht jede Generation sofort wieder erhöhen
+
+            if (ZahlZ >= LimitUpdates * SchwellenProzentLimitErhoehen &&
+                GenerationenSeitLetzterErhoehung >= CooldownGenerationen)
             {
                 if (LimitUpdates < 25000)
                 {
                     LimitUpdates += 100;
+                    GenerationenSeitLetzterErhoehung = 0;
                 }
             }
         }
@@ -576,6 +593,7 @@ extern "C" __declspec(dllexport) void TrainingNeuStarten()
     TrainingGestated = false;
     gen = 0;
     LimitUpdates = 7200;
+    GenerationenSeitLetzterErhoehung = 0;
     BesteFitnness.clear();
     Spiel_1_UL.clear();
     Spiel_2_UL.clear();
