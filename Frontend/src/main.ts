@@ -30,6 +30,8 @@ const NTButton = document.getElementById("NT-Button") as HTMLButtonElement;
 const WeiterButton = document.getElementById(
   "Weiter-Button",
 ) as HTMLButtonElement;
+const LinksButton = document.getElementById("Links") as HTMLButtonElement;
+const RechtsButton = document.getElementById("Rechts") as HTMLButtonElement;
 // Verbindung zum C# Server
 const verbindung = new WebSocket("ws://127.0.0.1:8080");
 let TriningSchonGesrted = false;
@@ -47,11 +49,14 @@ interface Trainigsmessge {
   BesteFitness: number;
   UeberlebtSpiel1: number;
   UeberlebtSpiel2: number;
+  UeberlebtSpiel3: number;
 }
-
+let Kraft = 0;
+let KraftResetTimer: number | undefined;
 const fitnessData: number[] = [];
 const survivalGameOneData: number[] = [];
 const survivalGameTwoData: number[] = [];
+const survivalGameTreeData: number[] = [];
 const generations: string[] = [];
 
 const chartOptions = {
@@ -100,6 +105,12 @@ const survivalChart = new Chart(survivalCanvas, {
         borderColor: "#78b7ff",
         tension: 0.35,
       },
+      {
+        label: "Spiel 3",
+        data: survivalGameTreeData,
+        borderColor: "#30b92c",
+        tension: 0.35,
+      },
     ],
   },
   options: chartOptions,
@@ -110,12 +121,14 @@ function zeigeTrainingsdaten(message: Trainigsmessge): void {
   fitnessData.push(message.BesteFitness);
   survivalGameOneData.push(message.UeberlebtSpiel1);
   survivalGameTwoData.push(message.UeberlebtSpiel2);
+  survivalGameTreeData.push(message.UeberlebtSpiel3);
 
   if (generations.length > 100) {
     generations.shift();
     fitnessData.shift();
     survivalGameOneData.shift();
     survivalGameTwoData.shift();
+    survivalGameTreeData.shift();
   }
 
   generationValue.textContent = String(message.Generation);
@@ -464,3 +477,29 @@ WeiterButton.addEventListener("click", () => {
   let JM = JSON.stringify(Message);
   verbindung.send(JM);
 });
+
+LinksButton.addEventListener("click", () => {
+  Kraft += 3;
+  sendeKraftUndPlaneReset();
+});
+
+RechtsButton.addEventListener("click", () => {
+  Kraft += -3;
+  sendeKraftUndPlaneReset();
+});
+
+function sendeKraftUndPlaneReset(): void {
+  if (KraftResetTimer !== undefined) {
+    window.clearTimeout(KraftResetTimer);
+  }
+
+  const Message = new ServerMessage("KraftHinzu", String(Kraft));
+  verbindung.send(JSON.stringify(Message));
+
+  KraftResetTimer = window.setTimeout(() => {
+    Kraft = 0;
+    const ResetMessage = new ServerMessage("KraftHinzu", "0");
+    verbindung.send(JSON.stringify(ResetMessage));
+    KraftResetTimer = undefined;
+  }, 500);
+}

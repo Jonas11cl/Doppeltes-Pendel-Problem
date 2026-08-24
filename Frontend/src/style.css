@@ -227,6 +227,8 @@ h2 {
 .Starte-Button:hover,
 .Reset-Button:hover,
 .Download-Button:hover,
+.Links:hover,
+.Rechts:hover,
 .Stop-Button:hover .NT-Button {
   filter: brightness(1.1);
   cursor: pointer;
@@ -250,4 +252,31 @@ h2 {
   .chart-wrap {
     height: 250px;
   }
+}
+
+.KraftButtons {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  width: 77.5%;
+  margin-bottom: 28px;
+  margin-top: 10px;
+}
+
+.Links,
+.Rechts {
+  background-color: #274c5c;
+  color: #ffffff;
+  height: 30px;
+  width: 100px;
+  border-radius: 8px;
+  border-style: solid;
+  border-color: #4b4b4b;
+  border-width: 2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+svg {
+  display: block;
 }

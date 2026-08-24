@@ -33,6 +33,7 @@ public class TrainingsStatusPaket
     public double BesteFitness { get; set; }
     public int UeberlebtSpiel1 { get; set; }
     public int UeberlebtSpiel2 { get; set; }
+    public int UeberlebtSpiel3 { get; set; }
 }
 
 public class KiPaket
@@ -69,11 +70,11 @@ public struct TrainingsStatus
     public double BesteFitness;
     public int UeberlebtSpiel1;
     public int UeberlebtSpiel2;
+    public int UeberlebtSpiel3;
 }
 
 class Program
 {
-    // WICHTIG: CallingConvention.Cdecl überall hinzugefügt, um Stack-Korruption zu verhindern!
     [DllImport("Engin.dll", CallingConvention = CallingConvention.Cdecl)]
     public static extern void StarteTraining();
 
@@ -109,6 +110,9 @@ class Program
 
     [DllImport("Engin.dll", CallingConvention = CallingConvention.Cdecl)]
     public static extern void HoleTrainingsStatus(out TrainingsStatus status);
+
+    [DllImport("Engin.dll", CallingConvention = CallingConvention.Cdecl)]
+    public static extern void KraftInput(double HKraft);
 
     private static readonly SemaphoreSlim ersterClientTor = new SemaphoreSlim(0);
     private static int torSchonOffen = 0;
@@ -153,10 +157,10 @@ class Program
                 if (NewMesssage.Aktion == "Restart")
                 {
                     Running = false;
-                    await Task.Delay(50); // Warten bis Physikschleife garantiert beendet ist
+                    await Task.Delay(50);
                     ResetPhysik();
                     Running = true;
-                    _ = updateLoop(clients); // Task im Hintergrund ausführen (nicht blockieren!)
+                    _ = updateLoop(clients);
                 }
                 else if (NewMesssage.Aktion == "Upload")
                 {
@@ -193,7 +197,6 @@ class Program
 
                         StarteTrainning();
 
-                        // Startet die eigentliche Trainingsschleife
                         trainingTask = Task.Run(() => StarteTraining());
 
                         trainingStatusAbbruch?.Cancel();
@@ -240,6 +243,13 @@ class Program
                     trainingStatusAbbruch = new CancellationTokenSource();
                     _ = SendeTrainingsStatus(clients, trainingStatusAbbruch.Token);
                 }
+                else if (NewMesssage.Aktion == "KraftHinzu")
+                {
+                    if (double.TryParse(NewMesssage.Inhalt, out double KraftHinzu))
+                    {
+                        KraftInput(KraftHinzu);
+                    }
+                }
             };
         });
 
@@ -271,7 +281,7 @@ class Program
             try
             {
                 client.Send(json);
-                Console.WriteLine("Gesendet an Client."); // Habe den großen JSON-String im Log ausgeblendet der Übersicht halber
+                Console.WriteLine("Gesendet an Client.");
             }
             catch (Exception ex)
             {
@@ -302,6 +312,7 @@ class Program
                         BesteFitness = status.BesteFitness,
                         UeberlebtSpiel1 = status.UeberlebtSpiel1,
                         UeberlebtSpiel2 = status.UeberlebtSpiel2,
+                        UeberlebtSpiel3 = status.UeberlebtSpiel3,
                     };
                     string json = JsonSerializer.Serialize(paket);
 
@@ -382,7 +393,6 @@ class Program
                 }
             }
 
-            // 8 Millisekunden Wartezeit für ca. 120 Updates pro Sekunde
             await Task.Delay(8);
         }
 

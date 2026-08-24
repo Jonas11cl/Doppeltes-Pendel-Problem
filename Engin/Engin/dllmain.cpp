@@ -17,11 +17,13 @@ struct TrainingsStatus
     double BesteFitness;
     int UeberlebtSpiel1;
     int UeberlebtSpiel2;
+    int UeberlebtSpiel3;
 };
 
 int LimitUpdates = 7200;
+double HinzuKraft = 0;
 
-TrainingsStatus aktuellerTrainingsStatus{0, 0.0, 0, 0};
+TrainingsStatus aktuellerTrainingsStatus{0, 0.0, 0, 0, 0};
 std::mutex trainingsStatusMutex;
 
 double RandomZahl(double Anfang, double Ende)
@@ -81,13 +83,13 @@ public:
     double Bias;
     double Fitness;
 
-    // NEU: Wir speichern die Updates für jede KI einzeln!
     int UpdatesS1 = 0;
     int UpdatesS2 = 0;
+    int UpdatesS3 = 0;
 
-    // NEU: Rohe (unnormierte) Fitness pro Spiel, nur fürs Debuggen/Logging interessant
     double FitnessS1 = 0.0;
     double FitnessS2 = 0.0;
+    double FitnessS3 = 0.0;
 
     double Summe_1[26];
     double Summe_2[12];
@@ -138,25 +140,27 @@ public:
         return Endsumme;
     }
 
-    void Motiren(const std::deque<double> &BesteFitness, double bestfitness, const std::deque<double> &UberlebtSpiel1, const std::deque<double> &UberlebtSpiel2)
+    void Motiren(const std::deque<double> &BesteFitness, double bestfitness, const std::deque<double> &UberlebtSpiel1, const std::deque<double> &UberlebtSpiel2, const std::deque<double> &UberlebtSpiel3)
     {
         double MuttationsWarscheilichkeit = 0.05;
         double RadMax = 0.05;
         double RadMin = -0.05;
 
-        if (UberlebtSpiel1.size() >= 10 && UberlebtSpiel2.size() >= 10)
+        if (UberlebtSpiel1.size() >= 10 && UberlebtSpiel2.size() >= 10 && UberlebtSpiel3.size() >= 10)
         {
-            double ZahlS1 = 0, ZahlS2 = 0;
+            double ZahlS1 = 0, ZahlS2 = 0, ZahlS3 = 0;
             for (int i = 0; i < 10; i++)
             {
                 ZahlS1 += UberlebtSpiel1[i];
                 ZahlS2 += UberlebtSpiel2[i];
+                ZahlS3 += UberlebtSpiel3[i];
             }
 
             ZahlS1 /= 10.0;
             ZahlS2 /= 10.0;
+            ZahlS3 /= 10.0;
 
-            double ZahlZ = (ZahlS1 + ZahlS2) / 2.0;
+            double ZahlZ = std::min({ZahlS1, ZahlS2, ZahlS3});
 
             if (ZahlZ >= LimitUpdates - 10)
             {
@@ -246,11 +250,11 @@ MeineKlasse lokalesSpiel;
 
 int gen = 0;
 bool trainingFertig = false;
-int GenerationenSeitLetzterErhoehung = 0; // NEU: Cooldown für LimitUpdates-Erhöhung
+int GenerationenSeitLetzterErhoehung = 0;
 std::deque<double> BesteFitnness;
 std::deque<double> Spiel_1_UL;
 std::deque<double> Spiel_2_UL;
-
+std::deque<double> Spiel_3_UL;
 void KiGeneriren()
 {
     for (int i = 0; i < 750; i++)
@@ -275,6 +279,9 @@ extern "C" __declspec(dllexport) void StarteTraining()
         double Winkel_Stange_1_1;
         double Winkel_Stange_2_1;
 
+        double Winkel_Stange_1_2 = RandomZahl(-0.08, 0.08);
+        double Winkel_Stange_2_2 = RandomZahl(-0.08, 0.08);
+
         if (gen < 500)
         {
             Winkel_Stange_1_1 = RandomZahl(-0.8, 0.8);
@@ -293,11 +300,8 @@ extern "C" __declspec(dllexport) void StarteTraining()
 
         double besteFitness = -INFINITY;
         int besterIndex = 0;
-        int MeistenUpdates[2] = {-1, -1};
+        int MeistenUpdates[3] = {-1, -1, -1};
 
-        // NEU: Damit Spiel 2 auch bei schweren Startwinkeln (~180°) eine faire Chance hat,
-        // hochzuschwingen, bevor abgebrochen wird. Vorher fix 1500 -> jetzt an LimitUpdates gekoppelt,
-        // aber nach oben gedeckelt, damit die Simulation nicht ewig läuft.
         int NichtObenLimitSpiel2 = std::min(4000, LimitUpdates / 2);
 
 #pragma omp parallel for
@@ -306,30 +310,60 @@ extern "C" __declspec(dllexport) void StarteTraining()
             Ki[Kig].Fitness = 0.0;
             Ki[Kig].FitnessS1 = 0.0;
             Ki[Kig].FitnessS2 = 0.0;
+            Ki[Kig].FitnessS3 = 0.0;
             Ki[Kig].UpdatesS1 = 0;
             Ki[Kig].UpdatesS2 = 0;
+            Ki[Kig].UpdatesS3 = 0;
 
-            // NEU: Fitness pro Spiel getrennt sammeln, statt sofort zu summieren
-            double FitnessProSpiel[2] = {0.0, 0.0};
+            double FitnessProSpiel[3] = {0.0, 0.0, 0.0};
 
-            for (int Spiel = 0; Spiel < 2; Spiel++)
+            for (int Spiel = 0; Spiel < 3; Spiel++)
             {
                 MeineKlasse lSpiel;
                 int Updates = 0;
                 double LocalFitness = 0.0;
 
+                int NachsterStupsIn = static_cast<int>(RandomZahl(100.0, 400.0));
+                double AktuelleStupsKraft = 0.0;
+                int StupsRestdauer = 0;
+
                 if (Spiel == 0)
                 {
                     lSpiel.PhysikZuruecksetzen(gen, Winkel_Stange_1_0, Winkel_Stange_2_0);
                 }
-                else
+                else if (Spiel == 1)
                 {
                     lSpiel.PhysikZuruecksetzen(gen, Winkel_Stange_1_1, Winkel_Stange_2_1);
+                }
+                else
+                {
+                    lSpiel.PhysikZuruecksetzen(gen, Winkel_Stange_1_2, Winkel_Stange_2_2);
                 }
 
                 while (lSpiel.spielvorbei != true)
                 {
                     double kraft = Ki[Kig].Denken(lSpiel.Wagen_Position, lSpiel.Wagen_Geschwindigkeit, lSpiel.Winkel_Stange_1, lSpiel.Winkel_Geschwindigkeit_1, lSpiel.Winkel_Stange_2, lSpiel.Winkel_Geschwindigkeit_2);
+
+                    if (Spiel == 2)
+                    {
+                        if (StupsRestdauer > 0)
+                        {
+                            kraft += AktuelleStupsKraft;
+                            StupsRestdauer--;
+                        }
+                        else
+                        {
+                            NachsterStupsIn--;
+                            if (NachsterStupsIn <= 0)
+                            {
+                                double Richtung = (RandomZahl(0.0, 1.0) < 0.5) ? -1.0 : 1.0;
+                                AktuelleStupsKraft = Richtung * RandomZahl(3.0, 6.0);
+                                StupsRestdauer = static_cast<int>(RandomZahl(5.0, 15.0));
+                                NachsterStupsIn = static_cast<int>(RandomZahl(150.0, 400.0));
+                            }
+                        }
+                    }
+
                     LocalFitness += lSpiel.Update(kraft, 0.01);
                     Updates++;
 
@@ -337,8 +371,7 @@ extern "C" __declspec(dllexport) void StarteTraining()
                     {
                         break;
                     }
-                    // NEU: Für Spiel 2 (Spiel == 1) das großzügigere Limit verwenden,
-                    // damit ein noch nicht "obenstehendes" KI-Modell nicht zu früh abgebrochen wird.
+
                     int NichtObenLimit = (Spiel == 1) ? NichtObenLimitSpiel2 : 1500;
                     if (Updates > NichtObenLimit && lSpiel.waroben == false)
                     {
@@ -346,9 +379,6 @@ extern "C" __declspec(dllexport) void StarteTraining()
                     }
                 }
 
-                // NEU: Pro Spiel auf "Fitness pro Zeitschritt" normieren.
-                // Damit dominiert nicht automatisch das Spiel, das zufällig länger läuft
-                // (z.B. weil LimitUpdates im Lauf des Trainings auf bis zu 25000 steigt).
                 double NormierteFitness = LocalFitness / std::max(1, Updates);
                 FitnessProSpiel[Spiel] = NormierteFitness;
 
@@ -362,6 +392,11 @@ extern "C" __declspec(dllexport) void StarteTraining()
                     Ki[Kig].UpdatesS2 = Updates;
                     Ki[Kig].FitnessS2 = NormierteFitness;
                 }
+                if (Spiel == 2)
+                {
+                    Ki[Kig].UpdatesS3 = Updates;
+                    Ki[Kig].FitnessS3 = NormierteFitness;
+                }
 
 #pragma omp critical
                 {
@@ -372,10 +407,7 @@ extern "C" __declspec(dllexport) void StarteTraining()
                 }
             }
 
-            // NEU: Das Minimum aus beiden (normierten) Spiel-Fitnesswerten nehmen statt der Summe.
-            // Eine KI, die nur Spiel 1 kann, aber in Spiel 2 versagt, wird jetzt nicht mehr
-            // durch die riesigen Spiel-1-Werte "reingewaschen" - sie muss in BEIDEN gut sein.
-            Ki[Kig].Fitness = std::min(FitnessProSpiel[0], FitnessProSpiel[1]);
+            Ki[Kig].Fitness = std::min({FitnessProSpiel[0], FitnessProSpiel[1], FitnessProSpiel[2]});
         }
 
         std::vector<std::pair<int, double>> ListeKis;
@@ -401,13 +433,15 @@ extern "C" __declspec(dllexport) void StarteTraining()
         std::cout << "Generation " << gen << " - Beste Fitness (min): " << BesteKi[0].Fitness
                   << " - Spiel1 Fitness: " << BesteKi[0].FitnessS1
                   << " - Spiel2 Fitness: " << BesteKi[0].FitnessS2
+                  << " - Spiel3(Stups) Fitness: " << BesteKi[0].FitnessS3
                   << " - Spiel 1 Updates: " << MeistenUpdates[0]
                   << " - Spiel 2 Updates: " << MeistenUpdates[1]
+                  << " - Spiel 3 Updates: " << MeistenUpdates[2]
                   << " - Limit: " << LimitUpdates << std::endl;
 
         {
             std::lock_guard<std::mutex> lock(trainingsStatusMutex);
-            aktuellerTrainingsStatus = {gen, BesteKi[0].Fitness, MeistenUpdates[0], MeistenUpdates[1]};
+            aktuellerTrainingsStatus = {gen, BesteKi[0].Fitness, MeistenUpdates[0], MeistenUpdates[1], MeistenUpdates[2]};
         }
 
         if (BesteFitnness.size() >= 50)
@@ -428,27 +462,31 @@ extern "C" __declspec(dllexport) void StarteTraining()
         }
         Spiel_2_UL.push_front(BesteKi[0].UpdatesS2);
 
-        if (Spiel_1_UL.size() >= 10 && Spiel_2_UL.size() >= 10)
+        if (Spiel_3_UL.size() >= 50)
         {
-            double ZahlS1 = 0, ZahlS2 = 0;
+            Spiel_3_UL.pop_back();
+        }
+        Spiel_3_UL.push_front(BesteKi[0].UpdatesS3);
+
+        if (Spiel_1_UL.size() >= 10 && Spiel_2_UL.size() >= 10 && Spiel_3_UL.size() >= 10)
+        {
+            double ZahlS1 = 0, ZahlS2 = 0, ZahlS3 = 0;
             for (int i = 0; i < 10; i++)
             {
                 ZahlS1 += Spiel_1_UL[i];
                 ZahlS2 += Spiel_2_UL[i];
+                ZahlS3 += Spiel_3_UL[i];
             }
             ZahlS1 /= 10.0;
             ZahlS2 /= 10.0;
+            ZahlS3 /= 10.0;
 
-            // NEU: Minimum statt Durchschnitt. Beim Durchschnitt konnte das leichte
-            // Spiel 1 (fast schon am Limit) die Schwelle allein hochziehen, obwohl
-            // Spiel 2 noch weit hinterherhinkt -> das Limit stieg schneller, als die
-            // Population (v.a. bei Spiel 2) tatsächlich mithalten konnte.
-            double ZahlZ = std::min(ZahlS1, ZahlS2);
+            double ZahlZ = std::min({ZahlS1, ZahlS2, ZahlS3});
 
             GenerationenSeitLetzterErhoehung++;
 
-            const double SchwellenProzentLimitErhoehen = 0.75; // anpassbar
-            const int CooldownGenerationen = 15;               // NEU: nicht jede Generation sofort wieder erhöhen
+            const double SchwellenProzentLimitErhoehen = 0.75;
+            const int CooldownGenerationen = 15;
 
             if (ZahlZ >= LimitUpdates * SchwellenProzentLimitErhoehen &&
                 GenerationenSeitLetzterErhoehung >= CooldownGenerationen)
@@ -466,6 +504,7 @@ extern "C" __declspec(dllexport) void StarteTraining()
             BesteFitnness.clear();
             Spiel_1_UL.clear();
             Spiel_2_UL.clear();
+            Spiel_3_UL.clear();
         }
 
         for (int f = 0; f < 5; f++)
@@ -479,7 +518,7 @@ extern "C" __declspec(dllexport) void StarteTraining()
             {
                 int Rand = static_cast<int>(RandomZahl(0.0, 4.999999));
                 Ki[e] = BesteKi[Rand];
-                Ki[e].Motiren(BesteFitnness, BesteKi[0].Fitness, Spiel_1_UL, Spiel_2_UL);
+                Ki[e].Motiren(BesteFitnness, BesteKi[0].Fitness, Spiel_1_UL, Spiel_2_UL, Spiel_3_UL);
             }
         }
     }
@@ -487,13 +526,13 @@ extern "C" __declspec(dllexport) void StarteTraining()
 
 extern "C" __declspec(dllexport) void ResetPhysik()
 {
-    lokalesSpiel.PhysikZuruecksetzen(10000, 3.14159, 3.14159);
+    lokalesSpiel.PhysikZuruecksetzen(10000, 3.0, 3.0);
 }
 
 extern "C" __declspec(dllexport) void MachEinenLiveSchritt()
 {
     double Krfat = BesteKi[0].Denken(lokalesSpiel.Wagen_Position, lokalesSpiel.Wagen_Geschwindigkeit, lokalesSpiel.Winkel_Stange_1, lokalesSpiel.Winkel_Geschwindigkeit_1, lokalesSpiel.Winkel_Stange_2, lokalesSpiel.Winkel_Geschwindigkeit_2);
-    lokalesSpiel.Update(Krfat, 0.01);
+    lokalesSpiel.Update(Krfat + HinzuKraft, 0.01);
 }
 
 extern "C" __declspec(dllexport) double HoleWagenPosition()
@@ -597,4 +636,10 @@ extern "C" __declspec(dllexport) void TrainingNeuStarten()
     BesteFitnness.clear();
     Spiel_1_UL.clear();
     Spiel_2_UL.clear();
+    Spiel_3_UL.clear();
+}
+
+extern "C" __declspec(dllexport) void KraftInput(double HKraft)
+{
+    HinzuKraft = HKraft;
 }
