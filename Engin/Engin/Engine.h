@@ -19,7 +19,7 @@ public:
     double Winkel_Geschwindigkeit_2 = 0.0;
     double Winkel_Beschleunigung_1 = 0.0;
     double Winkel_Beschleunigung_2 = 0.0;
-
+    double Unsicherheitsfaktor = 1.0;
     double Schubkraft = 0.0;
     double DeltaTime = 0.02;
 
