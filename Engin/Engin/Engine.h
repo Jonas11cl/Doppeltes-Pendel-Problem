@@ -19,6 +19,16 @@ public:
     double Winkel_Geschwindigkeit_2 = 0.0;
     double Winkel_Beschleunigung_1 = 0.0;
     double Winkel_Beschleunigung_2 = 0.0;
+     double CWagen_Position[3][7200];
+    double CWagen_Geschwindigkeit[3][7200];
+    double CWagen_Beschleunigung[7200];
+
+    double CWinkel_Stange_1[3][7200];
+    double CWinkel_Stange_2[3][7200];
+    double CWinkel_Geschwindigkeit_1[3][7200];
+    double CWinkel_Geschwindigkeit_2[3][7200];
+    double CWinkel_Beschleunigung_1[3][7200];
+    double CWinkel_Beschleunigung_2[3][7200];
     double Unsicherheitsfaktor = 1.0;
     double Schubkraft = 0.0;
     double DeltaTime = 0.02;
@@ -35,6 +45,7 @@ public:
     double Zielenergie_2 = Masse_Stange_2 * Schwerkraft * (Laenge_Stange_1 + Laenge_Stange_2);
     double GesammtZielEnergie = Zielenergie_1 + Zielenergie_2;
     bool waroben = false;
+    
     double RandomZahlR(double Anfang, double Ende)
     {
         static std::random_device rd;
@@ -53,7 +64,7 @@ public:
         Winkel_Stange_1 = Winkel1;
         Winkel_Stange_2 = Winkel2;
     }
-    double Update(double Schubkraft, double Zeitschritt)
+    double Update(double Schubkraft, double Zeitschritt,, int Updates, int Spiel)
     {
         double Fittness = 0;
         double Winkeldifference = Winkel_Stange_1 - Winkel_Stange_2;
@@ -98,6 +109,15 @@ public:
         {
             Fittness = FittnessBerechen();
         }
+        CWagen_Beschleunigung[Spiel][Updates] = Wagen_Beschleunigung;
+        CWagen_Geschwindigkeit[Spiel][Updates] = Wagen_Geschwindigkeit;
+        CWagen_Position[Spiel][Updates] = Wagen_Position;
+        CWinkel_Beschleunigung_1[Spiel][Updates] = Winkel_Beschleunigung_1;
+        CWinkel_Beschleunigung_2[Spiel][Updates] = Winkel_Beschleunigung_2;
+        CWinkel_Geschwindigkeit_1[Spiel][Updates] = Winkel_Geschwindigkeit_1;
+        CWinkel_Geschwindigkeit_2[Spiel][Updates] = Winkel_Geschwindigkeit_2;
+        CWinkel_Stange_1[Spiel][Updates] = Winkel_Stange_1;
+        CWinkel_Stange_2[Spiel][Updates] = Winkel_Stange_2;
 
         return Fittness;
     }

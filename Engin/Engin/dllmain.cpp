@@ -22,7 +22,10 @@ struct TrainingsStatus
     double CKiFittness[3][7200];
     double CFittness[3][7200];
     double CFehlerTick[3][7200];
+     double CNormalFehlerTick[3][7200];
     double CFehler;
+    double CRechenfehler;
+    double CKraft[3][7200]
 };
 
 int LimitUpdates = 7200;
@@ -74,6 +77,29 @@ public:
     double Gewichte_3[12];
     double Bias3;
 };
+
+
+class KibufferCritic
+{
+    public: 
+    double Gewichte_1[26][8];
+    double Biases_1[26];
+    double Gewichte_2[12][26];
+    double Biases_2[12];
+    double Gewichte_3[12];
+    double Bias3;
+}
+
+class KibufferActor
+{
+    public: 
+    double Gewichte_1[26][8];
+    double Biases_1[26];
+    double Gewichte_2[12][26];
+    double Biases_2[12];
+    double Gewichte_3[12];
+    double Bias3;
+}
 
 class HidenNode1
 {
@@ -539,6 +565,7 @@ extern "C" __declspec(dllexport) void StarteTraining()
                 aktuellerTrainingsStatus.Logwarscheilichkeit[Spiel][Updates] = normalwarscheinlichkeit;
                 double KiFittnness = Critic.Denken(lSpiel.Wagen_Position, lSpiel.Wagen_Geschwindigkeit, lSpiel.Winkel_Stange_1, lSpiel.Winkel_Geschwindigkeit_1, lSpiel.Winkel_Stange_2, lSpiel.Winkel_Geschwindigkeit_2);
                 aktuellerTrainingsStatus.CKiFittness[Spiel][Updates] = KiFittnness;
+                aktuellerTrainingsStatus.CKraft[Spiel][Updates] = kraft;
                 if (Spiel == 2)
                 {
                     if (StupsRestdauer > 0)
@@ -559,7 +586,7 @@ extern "C" __declspec(dllexport) void StarteTraining()
                     }
                 }
 
-                double AkkFittnes = lSpiel.Update(kraft, 0.01);
+                double AkkFittnes = lSpiel.Update(kraft, 0.01, Updates, Spiel);
                 LocalFitness += AkkFittnes;
                 aktuellerTrainingsStatus.CFittness[Spiel][Updates] = AkkFittnes;
 
@@ -681,10 +708,11 @@ extern "C" __declspec(dllexport) void StarteTraining()
         int Rand = static_cast<int>(RandomZahl(0.0, 4.999999));
 
         Ki.Motiren(BesteFitnness, Ki.Fitness, Spiel_1_UL, Spiel_2_UL, Spiel_3_UL);
-        double Zukunft = 0;
+        double Durchschitt = 0;
         for (int ge = 0; ge <= 2; ge++)
         {
-            int Updates;
+            double Zukunft = 0;
+            int Updates = 0;
             if (ge == 0)
             {
                 Updates = aktuellerTrainingsStatus.UeberlebtSpiel1;
@@ -697,13 +725,16 @@ extern "C" __declspec(dllexport) void StarteTraining()
             {
                 Updates = aktuellerTrainingsStatus.UeberlebtSpiel3;
             }
-            for (int up = 0; up <= Updates; up++)
+            for (int up = 0; up < Updates; up++)
             {
-                Zukunft = aktuellerTrainingsStatus.CFittness[ge][up] + (0.99 * Zukunft);
-                aktuellerTrainingsStatus.CFehlerTick[ge][up] = Zukunft - aktuellerTrainingsStatus.CKiFittness[ge][up];
+               
+                Zukunft = aktuellerTrainingsStatus.CFittness[ge][Updates-1- up] + (0.99 * Zukunft);
+                aktuellerTrainingsStatus.CFehlerTick[ge][Updates-1- up] = Zukunft - aktuellerTrainingsStatus.CKiFittness[ge][Updates-1- up];
             }
         }
-        double SpielFehler[3];
+        
+        double SpielFehler[3] = {0,0,0};
+        double Abweichung = 0;
         for (int ge = 0; ge <= 2; ge++)
         {
             int Updates;
@@ -719,14 +750,82 @@ extern "C" __declspec(dllexport) void StarteTraining()
             {
                 Updates = aktuellerTrainingsStatus.UeberlebtSpiel3;
             }
-            for (int up = 0; up <= Updates; up++)
+            for (int up = 0; up < Updates; up++)
             {
-                double Fehler = aktuellerTrainingsStatus.CFehlerTick[ge][Updates - up];
-
+                double Fehler = aktuellerTrainingsStatus.CFehlerTick[ge][up];
+                Durchschitt += aktuellerTrainingsStatus.CFehlerTick[ge][up];
                 SpielFehler[ge] += Fehler;
+                aktuellerTrainingsStatus
+            }
+        }
+          Durchschitt = Durchschitt /(aktuellerTrainingsStatus.UeberlebtSpiel1 + aktuellerTrainingsStatus.UeberlebtSpiel2 + aktuellerTrainingsStatus.UeberlebtSpiel3);
+         for (int ge = 0; ge <= 2; ge++)
+        {
+            int Updates = 0;
+            if (ge == 0)
+            {
+                Updates = aktuellerTrainingsStatus.UeberlebtSpiel1;
+            }
+            else if (ge == 1)
+            {
+                Updates = aktuellerTrainingsStatus.UeberlebtSpiel2;
+            }
+            else
+            {
+                Updates = aktuellerTrainingsStatus.UeberlebtSpiel3;
+            }
+            for (int up = 0; up < Updates; up++)
+            {
+              double HAbweichung = Durchschitt - aktuellerTrainingsStatus.CFehlerTick[ge][up];
+              Abweichung += (HAbweichung * HAbweichung);
+            }
+            
+        }
+       Abweichung =  Abweichung/(aktuellerTrainingsStatus.UeberlebtSpiel1 + aktuellerTrainingsStatus.UeberlebtSpiel2 + aktuellerTrainingsStatus.UeberlebtSpiel3);
+            Abweichung = std::sqrt(Abweichung);
+        for (int ge = 0; ge <= 2; ge++)
+        {
+            int Updates =0;
+            if (ge == 0)
+            {
+                Updates = aktuellerTrainingsStatus.UeberlebtSpiel1;
+            }
+            else if (ge == 1)
+            {
+                Updates = aktuellerTrainingsStatus.UeberlebtSpiel2;
+            }
+            else
+            {
+                Updates = aktuellerTrainingsStatus.UeberlebtSpiel3;
+            }
+            for (int up = 0; up < Updates; up++)
+            {
+              aktuellerTrainingsStatus.CNormalFehlerTick[ge][up] = (aktuellerTrainingsStatus.CFehlerTick[ge][up] - Durchschitt) /(Abweichung+0.00000001);
             }
         }
         aktuellerTrainingsStatus.CFehler = SpielFehler[0] + SpielFehler[1] + SpielFehler[2];
+
+        for (int ge = 0; ge <= 2; ge++)
+        {
+            int Updates =0;
+            if (ge == 0)
+            {
+                Updates = aktuellerTrainingsStatus.UeberlebtSpiel1;
+            }
+            else if (ge == 1)
+            {
+                Updates = aktuellerTrainingsStatus.UeberlebtSpiel2;
+            }
+            else
+            {
+                Updates = aktuellerTrainingsStatus.UeberlebtSpiel3;
+            }
+            for (int up = 0; up < Updates; up++)
+            {
+                
+              
+            }
+        }
     }
 }
 
